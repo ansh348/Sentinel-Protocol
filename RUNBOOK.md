@@ -51,6 +51,15 @@ make ops        # operations ONLY: completions, throttles, failures,
   auto-update for the matrix duration (`"env": {"DISABLE_AUTOUPDATER": "1"}`
   in `~/.claude/settings.json`) before resuming. Fired live 2026-06-10
   (2.1.170 -> 2.1.172 auto-update; guard halted before claiming any job).
+- **Windows shim trap (learned live 2026-06-10):** an npm-installed claude
+  resolves to a `.cmd` batch shim, and cmd.exe truncates command lines at
+  the first newline — multiline `--system-prompt` arguments silently vanish
+  while single-line calls (`--version`, the canary pong) pass, so the
+  version guard and `make test` both stay green while every orchestrator
+  call returns prose. Always point the conductor at a real executable:
+  `export TRIPWIRE_CLAUDE_BIN="$APPDATA\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"`
+  before `make queue`. Eleven empty zero-call "done" rows (jobs 14-24,
+  reason orchestrator_invalid) are the operational record of this trap.
 
 ## When the matrix closes
 
@@ -58,3 +67,6 @@ make ops        # operations ONLY: completions, throttles, failures,
   of `~/.claude/settings.json`, then update Claude Code freely. The version
   pin in `runs/queue.sqlite` meta is released with the matrix; record the
   closing CLI version in the wrap-up notes.
+- Remove the matrix-pinned npm install
+  (`npm uninstall -g @anthropic-ai/claude-code`) so the daily CLI resolves
+  back to the native install, and unset any `TRIPWIRE_CLAUDE_BIN`.
