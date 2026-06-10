@@ -3,6 +3,7 @@ supervisor mid-run neither duplicates nor loses jobs; the CLI version pin
 halts the matrix on change."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -109,6 +110,47 @@ def test_claim_is_exclusive(tmp_path):
     # recover_stale with token a's perspective frees ONLY b's claim
     freed = recover_stale(conn, "tok-a")
     assert freed == 1
+
+
+def test_failed_job_persists_run_context(tmp_path):
+    """CD-3 (author ruling 2026-06-10): a crash carrying run context must
+    leave run_dir + accumulated cost on the failed row, so the morning ops
+    scan sees the trace and the spend."""
+    db = make_db(tmp_path)
+    enqueue(connect(db), three_jobs()[:1])
+
+    class ContextCrash(RuntimeError):
+        def __init__(self, message, run_dir, cost_usd):
+            super().__init__(message)
+            self.run_dir = run_dir
+            self.cost_usd = cost_usd
+
+    def runner(job):
+        raise ContextCrash("FileNotFoundError: [Errno 2] missing checker",
+                           run_dir="runs/x-S1-clean-s1", cost_usd=0.1535)
+
+    counts = supervise(db, runner=runner, poll_s=0.05)
+    assert counts == {"failed": 1}
+    row = connect(db).execute("SELECT * FROM jobs").fetchone()
+    assert row["state"] == "failed"
+    assert row["run_dir"] == "runs/x-S1-clean-s1"
+    assert json.loads(row["note"])["cost_usd"] == 0.1535
+    assert "FileNotFoundError" in row["error"]
+
+
+def test_failed_job_without_context_keeps_old_shape(tmp_path):
+    db = make_db(tmp_path)
+    enqueue(connect(db), three_jobs()[:1])
+
+    def runner(job):
+        raise ValueError("boom")
+
+    counts = supervise(db, runner=runner, poll_s=0.05)
+    assert counts == {"failed": 1}
+    row = connect(db).execute("SELECT * FROM jobs").fetchone()
+    assert row["state"] == "failed"
+    assert row["run_dir"] is None and row["note"] is None
+    assert row["error"] == "ValueError: boom"
 
 
 def test_night0_enqueue_shape():

@@ -122,6 +122,18 @@ class RunAbort(Exception):
         self.detail = detail
 
 
+class RunCrash(RuntimeError):
+    """Operational crash escaping a run. Carries the run directory and the
+    cost accumulated before the crash so the queue can persist both on the
+    failed job row (CD-3 ruling, 2026-06-10): a failed run must never again
+    lose its run_dir/cost or hide its trace from the morning ops scan."""
+
+    def __init__(self, message: str, run_dir: str, cost_usd: float) -> None:
+        super().__init__(message)
+        self.run_dir = run_dir
+        self.cost_usd = cost_usd
+
+
 def _parse_json_reply(text: Optional[str]) -> tuple[Any, bool]:
     if not text:
         raise ValueError("empty reply")
@@ -781,6 +793,7 @@ class Conductor:
 
     def run(self) -> dict:
         success, reason, detail = False, None, ""
+        crash: Optional[BaseException] = None
         try:
             self.start_world()
             self.trace.emit(actor="conductor", event_type="run_start",
@@ -831,6 +844,11 @@ class Conductor:
             reason, detail = abort.reason, abort.detail
             self.trace.emit(actor="conductor", event_type="error",
                             payload={"reason": reason, "detail": detail})
+        except Exception as exc:  # CD-3: keep run context with the crash
+            crash = exc
+            reason, detail = "crash", f"{type(exc).__name__}: {exc}"
+            self.trace.emit(actor="conductor", event_type="error",
+                            payload={"reason": reason, "detail": detail})
         finally:
             total_cost = round(sum(r.cost_usd for r in self.all_calls), 6)
             self.trace.emit(actor="conductor", event_type="run_end",
@@ -847,6 +865,9 @@ class Conductor:
             if self.world_proc is not None:
                 _kill_tree(self.world_proc.pid)
             shutil.rmtree(self.session_home, ignore_errors=True)
+        if crash is not None:
+            raise RunCrash(detail, run_dir=str(self.run_dir),
+                           cost_usd=total_cost) from crash
         return {"run_id": self.run_id, "run_dir": str(self.run_dir),
                 "success": success, "reason": reason,
                 "replans": self.replans_done, "cost_usd": total_cost}

@@ -189,16 +189,23 @@ def supervise(db_path: str | Path = DEFAULT_DB,
                 time.sleep(poll_s)
                 continue
             throttled, error, summary = False, None, None
+            crash_run_dir, crash_cost = None, None
             try:
                 summary = runner(job)
                 run_dir = (summary or {}).get("run_dir")
                 if run_dir and trace_shows_throttle(run_dir):
                     throttled = True
             except Exception as exc:  # the queue never dies; it waits
+                # CD-3 (2026-06-10): crashes that carry run context
+                # (conductor.run_one.RunCrash) keep their run_dir and
+                # accumulated cost on the failed row.
+                crash_run_dir = getattr(exc, "run_dir", None)
+                crash_cost = getattr(exc, "cost_usd", None)
                 if THROTTLE_RE.search(str(exc)):
                     throttled = True
                 else:
-                    error = f"{type(exc).__name__}: {exc}"
+                    error = (str(exc) if crash_run_dir
+                             else f"{type(exc).__name__}: {exc}")
             now = time.time()
             if throttled:
                 backoff = min(backoff_base_s * (2 ** job["attempts"]),
@@ -210,9 +217,12 @@ def supervise(db_path: str | Path = DEFAULT_DB,
                      f"throttled; backoff {backoff:.0f}s", job["id"]))
                 print(f"job {job['id']} throttled; requeued in {backoff:.0f}s")
             elif error is not None:
+                note = (json.dumps({"cost_usd": crash_cost})
+                        if crash_cost is not None else None)
                 conn.execute(
-                    "UPDATE jobs SET state='failed', finished_at=?, error=?"
-                    " WHERE id=?", (now, error, job["id"]))
+                    "UPDATE jobs SET state='failed', finished_at=?, error=?,"
+                    " run_dir=?, note=? WHERE id=?",
+                    (now, error, crash_run_dir, note, job["id"]))
                 print(f"job {job['id']} FAILED: {error[:120]}")
             else:
                 conn.execute(
