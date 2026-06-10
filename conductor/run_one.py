@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import shutil
 import socket
 import subprocess
@@ -92,6 +93,38 @@ def _parse_json_reply(text: Optional[str]) -> tuple[Any, bool]:
         raise ValueError("empty reply")
     body, stripped = strip_markdown_fence(text)
     return json.loads(body.strip()), stripped
+
+
+_FENCED_BLOCK_RE = re.compile(r"```(?:json)?\s*\n(.*?)\n\s*```", re.DOTALL)
+
+
+def parse_worker_message(text: Optional[str]) -> tuple[Any, str]:
+    """Worker final messages per worker.md should be exactly one JSON object,
+    but Haiku workers reliably wrap it in prose + a fenced block (observed
+    live, S5 attempt 5 — escalations with correct ids and evidence died as
+    invalid_output in strict parsing). This conductor-side reader extracts the
+    payload anyway and RECORDS how (output_parse in worker_end), so worker
+    format compliance stays measurable. D2's strict boundary is untouched —
+    it governs the sentinel calls only."""
+    if not text:
+        raise ValueError("empty worker message")
+    try:
+        parsed, stripped = _parse_json_reply(text)
+        return parsed, ("fence" if stripped else "exact")
+    except ValueError:
+        pass
+    for block in reversed(_FENCED_BLOCK_RE.findall(text)):
+        try:
+            return json.loads(block.strip()), "embedded_fence"
+        except ValueError:
+            continue
+    idx = text.find("{")
+    while idx != -1:
+        try:
+            return json.loads(text[idx:].strip()), "trailing_json"
+        except ValueError:
+            idx = text.find("{", idx + 1)
+    raise ValueError("no JSON object in worker message")
 
 
 def _pick_port() -> int:
@@ -339,12 +372,12 @@ class Conductor:
         self.all_calls.append(result)
         self.live_pids.pop(instance_id, None)
 
-        status, output, fences = "failed", None, False
+        status, output, parse_mode = "failed", None, None
         if instance_id in self.paused:
             status = "paused"
         elif result.exit_code == 0 and result.result_text:
             try:
-                output, fences = _parse_json_reply(result.result_text)
+                output, parse_mode = parse_worker_message(result.result_text)
                 status = output.get("status", "invalid_output") \
                     if isinstance(output, dict) else "invalid_output"
             except ValueError:
@@ -352,7 +385,7 @@ class Conductor:
         self.trace.emit(actor=instance_id, event_type="worker_end",
                         payload={"subplan_id": step.subplan_id, "status": status,
                                  "wave": self.wave, "output": output,
-                                 "fences_stripped": fences,
+                                 "output_parse": parse_mode,
                                  **result.trace_payload()},
                         usage=result.trace_usage())
         return WorkerOutcome(instance_id, step.subplan_id, status, output, result)

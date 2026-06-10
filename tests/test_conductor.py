@@ -27,6 +27,26 @@ def conductor_env(monkeypatch):
     return _set
 
 
+def test_parse_worker_message_extraction_modes():
+    import json
+    import pytest
+    from conductor.run_one import parse_worker_message
+
+    esc = {"status": "escalated", "tripwire_id": "tw_x", "evidence": {"s": 404}}
+    assert parse_worker_message(json.dumps(esc)) == (esc, "exact")
+    assert parse_worker_message("```json\n" + json.dumps(esc) + "\n```")[1] == "fence"
+    # the exact live shape from S5 attempt 5: prose, then a fenced block
+    prose = ("I've detected a tripwire_control that requires escalation. "
+             "Following the control protocol, I must stop all work.\n\n"
+             "```json\n" + json.dumps(esc) + "\n```")
+    parsed, mode = parse_worker_message(prose)
+    assert parsed == esc and mode == "embedded_fence"
+    parsed, mode = parse_worker_message("Done. Result: " + json.dumps(esc))
+    assert parsed == esc and mode == "trailing_json"
+    with pytest.raises(ValueError):
+        parse_worker_message("no json here at all")
+
+
 def test_s1_batch_flow(tmp_path, conductor_env):
     conductor_env(escalate=False)
     summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",
