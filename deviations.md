@@ -563,7 +563,18 @@ from night 0, favorable or not. Once n_inject is fixed and the D18/D19
 redesigns land, all 9 manipulation checks re-run (S1, seed 1) under final
 parameters; the table must be all-QUALIFIED before any other matrix cell
 runs, and those spec-identical re-runs bank as the S1/seed-1 injected
-cells.
+cells. (Amended by D20: the a1/c1/d1 seed-1 clean cells were voided as
+class-(iv) coercions and re-ran under the repaired reader.)
+
+**Fraction-resolution rule (author, pre-committed 2026-06-10 BEFORE median
+computation):** if 50%-of-median lands on a fraction, n_inject = floor
+(round DOWN, toward earlier injection). Rationale, recorded with the rule:
+the known failure mode is tail-firing (CD-4); erring earlier only
+lengthens the post-injection runway and never weakens the manipulation.
+A-priori status: committed after the 11 clean-cell runs drained but before
+any median was computed or any trajectory length inspected — the medians
+did not exist when this rule was fixed, and it is applied mechanically
+(no stop if a fraction bites).
 
 ---
 
