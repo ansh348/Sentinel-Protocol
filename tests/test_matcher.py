@@ -40,6 +40,32 @@ def arm(client, *tripwires):
 
 # -- pointer lookup -----------------------------------------------------------
 
+def test_surface_enrichment_is_mechanical_and_blind():
+    """D6: identical rule for all plans, derived from OpenAPI, no injections."""
+    import yaml
+    from pathlib import Path
+    from world.surface import derive_surface, enriched_context, services_touched
+
+    repo = Path(__file__).resolve().parent.parent
+    a1 = yaml.safe_load((repo / "tasks" / "a1.yaml").read_text(encoding="utf-8"))
+    c1 = yaml.safe_load((repo / "tasks" / "c1.yaml").read_text(encoding="utf-8"))
+
+    assert services_touched(a1) == ["/auth", "/inventory", "/pricing", "/shipping"]
+    surface_a1 = derive_surface(a1)
+    assert derive_surface(a1) == surface_a1  # deterministic
+    assert "GET /pricing/quotes" in surface_a1  # alternative route included
+    assert "/repo" not in surface_a1            # untouched service excluded
+    for leak in ("endpoint_404", "schema_drift", "token_expiry", "n_inject",
+                 "doc_contradiction", "gate_skip_trap"):
+        assert leak not in surface_a1
+
+    surface_c1 = derive_surface(c1)
+    assert "Document corpus index" in surface_c1
+    assert "pol-returns" in surface_c1
+    # the lean context is preserved verbatim as the prefix
+    assert enriched_context(a1).startswith(a1["task_context"].strip())
+
+
 def test_pointer_lookup():
     body = {"a": {"b": [10, {"c": 5}]}, "unit_price": 9.5}
     assert _pointer_lookup(body, "/unit_price") == 9.5

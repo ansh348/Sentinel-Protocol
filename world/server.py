@@ -428,7 +428,21 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
         ctx.matcher.arm(tripwire_set)
         state.tripped_workers.clear()
         return {"ok": True, "armed": len(tripwire_set.tripwires),
-                "plan_id": tripwire_set.plan_id}
+                "plan_id": tripwire_set.plan_id,
+                # D5 condition: per-tripwire dialect, decided and recorded at
+                # arm time ("dead" = pattern can never match any world path)
+                "pattern_modes": {tw.id: (ctx.matcher.pattern_mode(tw.id) or "dead")
+                                  for tw in tripwire_set.tripwires
+                                  if tw.signal.url_pattern}}
+
+    @app.post("/admin/clear_tripped")
+    def admin_clear_tripped(body: dict) -> dict:
+        """Forgive a worker lineage after a NOISE verdict: without this, a
+        redispatched worker that presents the old id keeps receiving the stale
+        409 control and re-escalates the same adjudicated noise forever."""
+        for worker_id in body.get("worker_ids", []):
+            state.tripped_workers.pop(worker_id, None)
+        return {"ok": True, "tripped_workers": sorted(state.tripped_workers)}
 
     @app.post("/admin/suppress")
     def admin_suppress(body: dict) -> dict:

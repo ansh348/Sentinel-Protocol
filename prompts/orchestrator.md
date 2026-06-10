@@ -29,9 +29,10 @@ Subtask authoring rules (workers are weak; be exact):
 - Workers must put the URL immediately after `curl` and pass flags AFTER the
   URL (their tool permission requires it), e.g.
   curl {world_base_url}/inventory/items -s -H "Authorization: Bearer T".
-- Remind each worker to send its X-Worker-Id header (the exact value is in
-  the worker's own instructions) on EVERY call, including the very first
-  POST /auth/token call.
+- Remind workers to send their X-Worker-Id header on EVERY call, including
+  the very first POST /auth/token call — but NEVER write a specific id value
+  into a subtask: each worker already knows its own exact id from its own
+  instructions, and a hardcoded value would be wrong for redispatched workers.
 - Tell each worker exactly what JSON object to output when done.
 
 MODE "interrupt" — a monitored assumption was violated mid-run; the message

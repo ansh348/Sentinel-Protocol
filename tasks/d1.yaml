@@ -50,10 +50,3 @@ task_context: >
   /inventory endpoints require a bearer token from POST /auth/token. All
   worker tool calls are bash curl against the run's world port with an
   X-Worker-Id header.
-  API surface (also discoverable at GET /openapi.json): POST /auth/token;
-  GET /auth/validate; GET /inventory/items; GET /inventory/items/{sku};
-  GET /pricing/quote/{sku}; GET /pricing/quotes?sku=; GET
-  /shipping/destinations; GET /shipping/rates/{sku}?dest=; GET
-  /docs/passages; GET /docs/passages/{id}; GET /docs/search?q=; POST
-  /docs/validate; POST /docs/package; GET /repo/files; GET
-  /repo/files/{path}; PUT /repo/files/{path}; POST /repo/validate.

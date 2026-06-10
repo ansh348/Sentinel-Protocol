@@ -49,10 +49,3 @@ task_context: >
   tokens), inventory, pricing, shipping, document store, fixture repo. All
   worker tool calls are bash curl requests against the run's world port, with
   an X-Worker-Id header. Six SKUs exist; four shipping destination zones.
-  API surface (also discoverable at GET /openapi.json): POST /auth/token;
-  GET /auth/validate; GET /inventory/items; GET /inventory/items/{sku};
-  GET /pricing/quote/{sku}; GET /pricing/quotes?sku=; GET
-  /shipping/destinations; GET /shipping/rates/{sku}?dest=; GET
-  /docs/passages; GET /docs/passages/{id}; GET /docs/search?q=; POST
-  /docs/validate; POST /docs/package; GET /repo/files; GET
-  /repo/files/{path}; PUT /repo/files/{path}; POST /repo/validate.

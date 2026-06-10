@@ -163,7 +163,7 @@ and this repo, never in the exported rater package.
 
 ## D5 — `url_pattern` matching: static glob-or-regex classification
 
-**Date:** 2026-06-10 (flagged for author veto, like D2).
+**Date:** 2026-06-10 (author-approved with conditions).
 **Affects:** the middleware matcher's url_pattern gate; frozen DSL unchanged.
 
 **Evidence:** the DSL comment says url_pattern is a "glob over world-server
@@ -174,11 +174,58 @@ under pure glob every gate is dead and S5 cannot detect anything — the
 architecture would die on an interface ambiguity rather than a measured
 failure.
 
-**Policy:** pattern semantics are decided ONCE, statically, at arm time, by
-matching the pattern against a canonical sample of concrete world paths
-(`world.server.PATH_SAMPLES`): glob if it glob-matches any sample, else regex
-if it regex-matches any sample, else a dead pattern that never matches.
-Matching stays pure and deterministic; every tripwire_fire records
-`url_match_mode` so analysis can stratify by pattern dialect, and Phase 0's
-mechanized observable bit uses the identical classifier (dead patterns score
-observable=0).
+**Exact classification rule (deterministic, decided once at arm time):**
+1. If the pattern glob-matches (`fnmatchcase`) at least one path in the
+   committed canonical sample `world.server.PATH_SAMPLES`, its dialect is
+   **glob**. Glob takes precedence: a pattern valid under both dialects is
+   treated as glob, full stop.
+2. Otherwise, if it compiles as a regex and `re.search`-matches at least one
+   sample path, its dialect is **regex**.
+3. Otherwise it is **dead** and never matches any request.
+
+The dialect is recorded per tripwire at **arm time**: `/admin/arm_tripwires`
+returns `pattern_modes` and the conductor writes them into the tripwire_set
+trace event (`url_match_modes`); each tripwire_fire additionally carries
+`url_match_mode`. Phase 0's mechanized observable bit uses the identical
+classifier (dead patterns score observable=0).
+
+**Finding for the paper:** this is the second schema-transmission gap
+alongside D2 (fences) — constraints expressed only in frozen prose or code
+comments do not reach the compiler model. DSL v2 in the full study moves such
+constraints into schema-visible `Field` descriptions.
+
+---
+
+## D6 — Phase 0 recompile under production-fidelity task context
+
+**Date:** 2026-06-10 (author-ordered sequencing, pre-committed before any
+recompile ran).
+
+**Sequencing rules (verbatim from the author's ruling):** the lean-context
+would-catch result (6/9, 67%) stands in the record as the lean-context
+datapoint; the lean sets are NOT sent for external rating. The rich-context
+recompile is the official KG0 coverage measurement. If it clears 80%, the new
+gpt_audit_package is exported for external rating; if it fails, the single
+KG0-permitted prompt-iteration is on the table and the author decides its
+content.
+
+**Independence evidence (why the context amendment is not data-driven
+tuning):** the endpoint-inventory amendment originated from the live S5
+endpoint-invention bug, observed BEFORE any would-catch number existed:
+- The S1 live run (`runs/a1-S1-endpoint_404-s1`, after commit 4d61229) shows
+  the orchestrator inventing `/pricing/prices` — its redo subtask reads "The
+  endpoint /pricing/prices returned 404".
+- The second S5 live run shows workers receiving FastAPI's default
+  `{"detail": "Not Found"}` (unknown-route 404s), not the deprecation body —
+  i.e. calls to endpoints that never existed.
+- The would-catch harness and its first numbers (44% with simulation bugs,
+  then 67%) were produced after those observations, in commit 77fb03a.
+
+**Mechanical, blind enrichment:** `world/surface.py` (committed) derives, for
+every world service a plan touches (rule: the service's route prefix appears
+verbatim in the goal/plan text), its surface verbatim from the world server's
+own OpenAPI spec, plus the corpus index (passage ids/titles) when the document
+store is touched. One identical rule for all four plans; no reference to
+injection specs anywhere; plans, assumption lists, and all other compile
+inputs stay byte-identical to the lean versions; the frozen compile prompt is
+untouched. The conductor uses the same enrichment for production runs.

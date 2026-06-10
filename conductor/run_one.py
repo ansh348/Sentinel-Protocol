@@ -40,6 +40,7 @@ from sentinel.compile import compile_tripwires, strip_markdown_fence
 from sentinel.judge import judge_escalation
 from trace import TraceWriter
 from world.state import InjectionSpec, RunConfig
+from world.surface import enriched_context
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PORT_POOL = range(8400, 8408)
@@ -132,6 +133,9 @@ class Conductor:
                  max_replans: int = 2,
                  max_escalations: int = MAX_ESCALATIONS) -> None:
         self.task = yaml.safe_load(Path(task_path).read_text(encoding="utf-8"))
+        # production-fidelity context (D6): lean yaml context + the mechanical
+        # surface appendix; used for both orchestrator and sentinel compiles
+        self.task_context = enriched_context(self.task)
         self.system: SystemConfig = SYSTEMS[system_id]
         self.injection_name = injection
         self.n_inject = n_inject
@@ -172,6 +176,7 @@ class Conductor:
         self.subplan_of: dict[str, str] = {}
         self.replans_done = 0
         self.escalations_seen = 0
+        self.noise_tripwires: set[str] = set()
         self.redo_used = False
         self.wave = 0
         self.all_calls: list[SessionResult] = []
@@ -248,7 +253,7 @@ class Conductor:
         self.orch_system_prompt = (template
                                    .replace("{world_base_url}", self.base_url)
                                    .replace("{task_goal}", self.task["goal"].strip())
-                                   .replace("{task_context}", self.task["task_context"].strip())
+                                   .replace("{task_context}", self.task_context)
                                    .replace("{fan_out}", str(self.task.get("fan_out", 4))))
         raw = self._orchestrator_turn({"mode": "plan"}, "plan")
         try:
@@ -292,19 +297,21 @@ class Conductor:
 
     def compile_and_arm(self) -> None:
         tripwire_set, results = compile_tripwires(
-            self.plan_text(), self.task["task_context"].strip(), self.trace,
+            self.plan_text(), self.task_context, self.trace,
             isolated_home=self.session_home)
         self.all_calls.extend(results)
         if tripwire_set is None:
             raise RunAbort("compile_failed",
                            f"no schema-valid set after {len(results)} attempts")
         payload = json.loads(tripwire_set.model_dump_json())
-        self._admin("POST", "/admin/arm_tripwires", json=payload)
+        arm_reply = self._admin("POST", "/admin/arm_tripwires", json=payload).json()
         self.armed_tripwires = {t["id"]: t for t in payload["tripwires"]}
         self.trace.emit(actor="sentinel", event_type="tripwire_set",
                         payload={"plan_id": payload["plan_id"],
                                  "revision": self.plan.revision,
                                  "count": len(payload["tripwires"]),
+                                 # D5 condition: dialect recorded at ARM time
+                                 "url_match_modes": arm_reply.get("pattern_modes", {}),
                                  "tripwires": payload["tripwires"]})
 
     # ----------------------------------------------------------------- workers
@@ -387,27 +394,40 @@ class Conductor:
                                  "subplan_id": outcome.subplan_id})
 
         tripwire = self.armed_tripwires.get(tripwire_id, {"id": tripwire_id})
+        # A tripwire already adjudicated NOISE is not judged again: re-judging
+        # the same adjudicated noise burns judge calls and (via stale 409
+        # controls) can loop forever.
+        already_noise = tripwire_id in self.noise_tripwires
         verdict = None
-        if self.system.judge_enabled:
+        if self.system.judge_enabled and not already_noise:
             verdict, judge_results = judge_escalation(
                 tripwire, evidence, self.plan_text(), self.trace,
                 isolated_home=self.session_home)
             self.all_calls.extend(judge_results)
 
-        if verdict is None or verdict.verdict == "NOISE":
-            if verdict is None and self.system.judge_enabled:
+        if already_noise or verdict is None or verdict.verdict == "NOISE":
+            if (verdict is None and self.system.judge_enabled
+                    and not already_noise):
                 self.trace.emit(actor="conductor", event_type="error",
                                 payload={"where": "judge",
                                          "detail": "no valid verdict; treating as NOISE"})
+            self.noise_tripwires.add(tripwire_id)
             if tripwire_id in self.armed_tripwires:
                 self._admin("POST", "/admin/suppress",
                             json={"tripwire_id": tripwire_id})
+            # forgive the lineage: stale tripped flags must not 409 the
+            # redispatched worker if it presents the old id
+            base_id = outcome.instance_id.split("r")[0]
+            self._admin("POST", "/admin/clear_tripped",
+                        json={"worker_ids": [outcome.instance_id, base_id,
+                                             "unknown"]})
             step = PlanStep(subplan_id=outcome.subplan_id,
-                            worker_id=outcome.instance_id.split("r")[0],
+                            worker_id=base_id,
                             subtask=self._subtask_of(outcome.subplan_id))
             self.wave += 1
             self.trace.emit(actor="conductor", event_type="redispatch",
                             payload={"after": "noise", "wave": self.wave,
+                                     "already_noise": already_noise,
                                      "steps": [step.model_dump()]})
             self.dispatch(executor, [step], pending)
             return

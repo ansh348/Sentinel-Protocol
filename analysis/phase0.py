@@ -46,7 +46,8 @@ PLAN_COLUMNS = [
 ]
 
 
-def run_phase0(task_ids: list[str], tasks_dir: Path, outdir: Path) -> bool:
+def run_phase0(task_ids: list[str], tasks_dir: Path, outdir: Path,
+               enrich: bool = False) -> bool:
     outdir.mkdir(parents=True, exist_ok=True)
     cli_version = get_cli_version()
     scoring_rows: list[dict] = []
@@ -56,14 +57,21 @@ def run_phase0(task_ids: list[str], tasks_dir: Path, outdir: Path) -> bool:
     for task_id in task_ids:
         task = yaml.safe_load((tasks_dir / f"{task_id}.yaml").read_text(encoding="utf-8"))
         plan = plan_text_from_task(task)
+        if enrich:
+            # D6: mechanical, blind, identical rule for all plans; the plan
+            # text and the lean yaml stay byte-identical
+            from world.surface import enriched_context
+            task_context = enriched_context(task)
+        else:
+            task_context = task["task_context"].strip()
         trace = TraceWriter(outdir / f"trace_{task_id}.jsonl",
                             run_id=f"phase0-{task_id}", seed=0,
                             system="phase0", task_id=task_id)
         trace.emit(actor="conductor", event_type="run_start",
-                   payload={"mode": "phase0", "cli_version": cli_version})
+                   payload={"mode": "phase0", "cli_version": cli_version,
+                            "context": "rich" if enrich else "lean"})
         started = time.monotonic()
-        tripwire_set, results = compile_tripwires(plan, task["task_context"].strip(),
-                                                  trace)
+        tripwire_set, results = compile_tripwires(plan, task_context, trace)
         latency = time.monotonic() - started
         cost = sum(r.cost_usd for r in results)
         usage_in = sum((r.usage or {}).get("input_tokens", 0)
@@ -157,8 +165,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--tasks", nargs="*", default=list(PHASE0_TASKS))
     parser.add_argument("--tasks-dir", default="tasks")
     parser.add_argument("--outdir", default="runs/phase0")
+    parser.add_argument("--enrich", action="store_true",
+                        help="D6 production-fidelity context (mechanical, blind)")
     args = parser.parse_args(argv)
-    ok = run_phase0(args.tasks, Path(args.tasks_dir), Path(args.outdir))
+    ok = run_phase0(args.tasks, Path(args.tasks_dir), Path(args.outdir),
+                    enrich=args.enrich)
     return 0 if ok else 1
 
 
