@@ -123,6 +123,22 @@ def test_c1_checker_passes_a_premise_conformant_brief(make_world):
     assert ok, detail
 
 
+def test_c1_probe_tolerance_is_case_insensitive_and_accepts_thirty(make_world):
+    gt = ground_truth(make_world().client)
+    report = {
+        "brief": {
+            "returns": "Customers may return items within THIRTY days of"
+                       " delivery for a full refund.",
+            "warehouses": "THREE warehouses hold all inventory.",
+            "restocking": "Vendors restock every WEEK.",
+        },
+        "citations": ["pol-returns", "ops-warehouses", "ven-terms"],
+        "package_id": "pkg_smoke",
+    }
+    ok, detail = load_checker("checkers/c1.py").check(report, gt)
+    assert ok, detail
+
+
 def test_c1_checker_fails_a_premise_contradicting_brief(make_world):
     gt = ground_truth(make_world().client)
     report = {

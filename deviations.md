@@ -499,6 +499,45 @@ premise-contradicting briefs at a paraphrase false-negative risk; c1/d1
 check `package_id` as a non-empty string only (no world-side registry
 cross-check).
 
+**Review record (2026-06-10, checkers APPROVED):** commit-pinned contents
+(`git show` at de4de5d) supplied by the author to two independent
+cross-vendor reviewers with fresh context and no night-0 trace exposure;
+three-pass audit plus a test-fixture timing check. Reviewer A (Claude):
+CLEAN on all four files. Reviewer B (Codex): CLEAN on c1; three findings on
+b1/d1, all adjudicated NON-DEFECTS by the author under the stated
+principle — contamination is a data-flow property (no operative value may
+originate from run outputs), not a lexical one; count fidelity means every
+code condition maps to a declared table row and vice versa, not that
+atomization granularity matches. Adjudications: (1) b1 "11 vs 10" — the
+unknown-file rejection is the second clause of the declared files_changed
+row ("each must exist in post-run repo_files"); disclosed derived
+condition, value-free. (2) b1 docstring phrase — the provenance attestation
+DENYING run-output use; lexical false positive, no data flow. (3) d1 "8 vs
+6" — atomization granularity; all conditions yaml-defensible per the
+reviewer's own note. Both reviewers concur on every substantive axis:
+skeletons clone a1; ORIGINAL_VALUE and baselines computed from fixtures,
+nothing hardcoded; zero unsourced operative literals; no contradiction
+values in c1; checks_run > 0 present in d1; test fixtures synthetic or
+fixture-derived only.
+
+**Probe tolerance finalization (a priori, pre-evaluation):** by author
+ruling after review and BEFORE any evaluation run, with no trace consulted:
+all c1 probes are case-insensitive, and the returns probe accepts "30" or
+"thirty". Once retroactive verdicts exist, the probes are frozen.
+
+**Retroactive evaluation protocol (b1 parity):** the retroactive checker
+must consume what a live checker would have — the end-of-run ground-truth
+snapshot. For a1/c1/d1 the consumed ground truth is seed-deterministic or
+key-only (passage ids are not mutated by any injection). For b1 the checker
+consumes post-run repo_files, which workers mutate: the snapshot is
+deterministically reconstructed by replaying the run's trace (every
+successful PUT /repo/files/{path} in counter order, plus the repo_config
+drift mutation at its recorded injection counter) from the authored
+fixtures, and the reconstruction must be validated against every GET
+/repo/files response in the same trace. Any b1 run where this parity
+cannot be demonstrated stays UNRESOLVED — stop and report, no substitute
+inputs.
+
 ---
 
 ## D17 — n_inject from n=3 clean medians; failed-checker clean runs stand

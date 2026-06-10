@@ -21,11 +21,14 @@ PREMISES = {
 
 
 def _premise_ok(key: str, text: str) -> bool:
+    # Probe tolerance finalized a priori, pre-evaluation (author ruling
+    # 2026-06-10, recorded in D16): case-insensitive throughout; returns
+    # accepts "30" or "thirty". Frozen once retroactive verdicts exist.
     lower = text.lower()
     if key == "returns":
-        return "30" in text
+        return "30" in lower or "thirty" in lower
     if key == "warehouses":
-        return "three" in lower or "3" in text
+        return "three" in lower or "3" in lower
     return "week" in lower  # restocking
 
 
