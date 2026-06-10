@@ -110,6 +110,29 @@ def test_touch_trigger_dedup_per_resource():
                                 status=200, body={})) == 1
 
 
+def test_url_pattern_regex_fallback_d5():
+    """deviations.md D5: regex-style patterns from the compiler are honored
+    via static arm-time classification; dead patterns never match."""
+    from world.server import classify_url_pattern
+    assert classify_url_pattern("/pricing/quote/*") == "glob"
+    assert classify_url_pattern(".*/pricing/.*") == "regex"
+    assert classify_url_pattern("/nowhere/at/all/*") is None
+
+    matcher = TripwireMatcher()
+    matcher.arm(make_set(
+        tw(id_="tw_rx", signal={"type": "http_response",
+                                "url_pattern": ".*/pricing/.*",
+                                "status_in": [404, 410]}),
+        tw(id_="tw_dead", signal={"type": "http_response",
+                                  "url_pattern": "/nowhere/*",
+                                  "status_in": [404]})))
+    hits = matcher.evaluate(method="GET", path="/pricing/quote/X", status=404,
+                            body={})
+    assert [t.id for t in hits] == ["tw_rx"]
+    assert matcher.pattern_mode("tw_rx") == "regex"
+    assert matcher.pattern_mode("tw_dead") is None
+
+
 def test_order_violation():
     matcher = TripwireMatcher()
     matcher.arm(make_set(

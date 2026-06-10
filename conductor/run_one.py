@@ -43,7 +43,10 @@ from world.state import InjectionSpec, RunConfig
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PORT_POOL = range(8400, 8408)
-MAX_ESCALATIONS = 6  # backstop against NOISE refire loops
+# Backstop against escalation loops. Must exceed the tripwire budget (12): an
+# over-broad compiled set costs one NOISE round per bad tripwire before the
+# matcher converges, and that grind is honest FIR data (KG2), not a crash.
+MAX_ESCALATIONS = 12
 
 
 class PlanStep(BaseModel):
@@ -126,13 +129,15 @@ class Conductor:
     def __init__(self, *, task_path: str | Path, system_id: str,
                  injection: Optional[str] = None, n_inject: Optional[int] = None,
                  seed: int = 1, runs_root: str | Path = "runs",
-                 max_replans: int = 2) -> None:
+                 max_replans: int = 2,
+                 max_escalations: int = MAX_ESCALATIONS) -> None:
         self.task = yaml.safe_load(Path(task_path).read_text(encoding="utf-8"))
         self.system: SystemConfig = SYSTEMS[system_id]
         self.injection_name = injection
         self.n_inject = n_inject
         self.seed = seed
         self.max_replans = max_replans
+        self.max_escalations = max_escalations
 
         label = injection or "clean"
         base_id = f"{self.task['id']}-{system_id}-{label}-s{seed}"
@@ -372,9 +377,9 @@ class Conductor:
 
     def handle_escalation(self, outcome: WorkerOutcome, executor, pending) -> None:
         self.escalations_seen += 1
-        if self.escalations_seen > MAX_ESCALATIONS:
+        if self.escalations_seen > self.max_escalations:
             raise RunAbort("escalation_loop",
-                           f"more than {MAX_ESCALATIONS} escalations")
+                           f"more than {self.max_escalations} escalations")
         tripwire_id = (outcome.output or {}).get("tripwire_id", "unknown")
         evidence = (outcome.output or {}).get("evidence", {})
         self.trace.emit(actor=outcome.instance_id, event_type="escalation",

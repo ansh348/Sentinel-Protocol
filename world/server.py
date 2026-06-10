@@ -39,6 +39,37 @@ from world.services import auth, docs, inventory, pricing, repo, shipping
 
 _MISSING = object()
 
+# Canonical concrete paths covering every route family; used to classify
+# url_patterns at arm time (D5) and by the Phase 0 mechanized-observable bit.
+PATH_SAMPLES = (
+    "/auth/token", "/auth/validate",
+    "/inventory/items", "/inventory/items/WID-001", "/inventory/items/GAD-001",
+    "/pricing/quote/WID-001", "/pricing/quote/GAD-001", "/pricing/quotes",
+    "/shipping/destinations", "/shipping/rates/WID-001", "/shipping/rates/GAD-001",
+    "/docs/passages", "/docs/passages/pol-returns", "/docs/passages/ops-warehouses",
+    "/docs/search", "/docs/validate", "/docs/package",
+    "/repo/files", "/repo/files/config/settings.yaml", "/repo/files/src/aggregate.py",
+    "/repo/validate",
+)
+
+
+def classify_url_pattern(pattern: str) -> Optional[str]:
+    """deviations.md D5: url_pattern is matched as a glob per the DSL comment,
+    but the frozen compile prompt gives the model no way to know that, and
+    compiled sets reliably emit regex-style patterns. Classification is static
+    and deterministic, decided once at arm time against PATH_SAMPLES: glob if
+    the pattern glob-matches any sample, else regex if it regex-matches any
+    sample, else None (a dead pattern that never matches anything)."""
+    if any(fnmatchcase(p, pattern) for p in PATH_SAMPLES):
+        return "glob"
+    try:
+        rx = re.compile(pattern)
+    except re.error:
+        return None
+    if any(rx.search(p) for p in PATH_SAMPLES):
+        return "regex"
+    return None
+
 
 def _pointer_lookup(body: Any, pointer: str) -> Any:
     """Resolve a JSON pointer (RFC6901-style '/a/b'; dotted 'a.b' tolerated)
@@ -76,12 +107,20 @@ class TripwireMatcher:
         self.suppressed: set[str] = set()
         self._touch_seen: set[tuple[str, str]] = set()
         self._call_history: list[tuple[str, str]] = []
+        self._pattern_mode: dict[str, Optional[str]] = {}
 
     def arm(self, tripwire_set: TripwireSet) -> None:
         self.tripwires = list(tripwire_set.tripwires)
         self.suppressed.clear()
         self._touch_seen.clear()
         self._call_history.clear()
+        self._pattern_mode = {
+            tw.id: classify_url_pattern(tw.signal.url_pattern)
+            for tw in self.tripwires if tw.signal.url_pattern
+        }
+
+    def pattern_mode(self, tripwire_id: str) -> Optional[str]:
+        return self._pattern_mode.get(tripwire_id)
 
     def suppress(self, tripwire_id: str) -> None:
         self.suppressed.add(tripwire_id)
@@ -107,8 +146,16 @@ class TripwireMatcher:
             return False
         if sig.method and sig.method.upper() != method.upper():
             return False
-        if sig.url_pattern and not fnmatchcase(path, sig.url_pattern):
-            return False
+        if sig.url_pattern:
+            mode = self._pattern_mode.get(tw.id)
+            if mode == "glob":
+                if not fnmatchcase(path, sig.url_pattern):
+                    return False
+            elif mode == "regex":
+                if not re.search(sig.url_pattern, path):
+                    return False
+            else:
+                return False  # dead pattern: never matches (D5)
 
         predicates: list[bool] = []
         if sig.status_in is not None:
@@ -309,7 +356,8 @@ class WorldMiddleware:
                          "severity": tw.severity.value,
                          "on_trigger": tw.action.on_trigger,
                          "log_only": log_only, "path": path, "status": status,
-                         "worker_id": worker_id},
+                         "worker_id": worker_id,
+                         "url_match_mode": ctx.matcher.pattern_mode(tw.id)},
             )
             if not log_only and control is None:
                 control = build_control(tw, method=method, path=path,
