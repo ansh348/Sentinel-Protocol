@@ -370,6 +370,42 @@ def agreement(a_csv: Path, b_csv: Path) -> int:
     return len(disputes)
 
 
+def consensus(a_csv: Path, b_csv: Path, adjudication_csv: Path,
+              out_csv: Path) -> Path:
+    """D4 amendment step 4 input: agreed bits pass through; disputed bits take
+    the author's verdict (CSV: task_id,tripwire_id,property,verdict,justification).
+    Refuses to write if any disputed bit lacks a verdict."""
+    def load(path: Path) -> dict:
+        with open(path, newline="", encoding="utf-8") as fh:
+            return {(r["task_id"], r["tripwire_id"]): r
+                    for r in csv.DictReader(fh)}
+    a, b = load(a_csv), load(b_csv)
+    verdicts = {}
+    with open(adjudication_csv, newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            verdicts[(r["task_id"], r["tripwire_id"], r["property"])] = r["verdict"]
+    rows, missing = [], []
+    for key in sorted(set(a) | set(b)):
+        row = {"task_id": key[0], "tripwire_id": key[1]}
+        for prop in JUDGED_PROPERTIES:
+            va, vb = a[key][prop], b[key][prop]
+            if va == vb:
+                row[prop] = va
+            elif (key[0], key[1], prop) in verdicts:
+                row[prop] = verdicts[(key[0], key[1], prop)]
+            else:
+                missing.append(f"{key[0]}/{key[1]}.{prop}")
+        rows.append(row)
+    if missing:
+        raise SystemExit(f"unadjudicated disputed bits: {missing}")
+    with open(out_csv, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["task_id", "tripwire_id",
+                                                *JUDGED_PROPERTIES])
+        writer.writeheader()
+        writer.writerows(rows)
+    return out_csv
+
+
 # --------------------------------------------------------------------- kg0 --
 
 def kg0(outdir: Path, external_csv: Optional[Path]) -> int:
@@ -420,13 +456,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Phase 0 audit tooling (D4)")
     parser.add_argument("command",
                         choices=["package", "observable", "would-catch", "kg0",
-                                 "audit-sample", "normalize", "agreement"])
+                                 "audit-sample", "normalize", "agreement",
+                                 "consensus"])
     parser.add_argument("--outdir", default="runs/phase0")
     parser.add_argument("--external", default=None,
                         help="external rater CSV (kg0)")
     parser.add_argument("--file", default=None, help="raw CSV (normalize)")
     parser.add_argument("--a", default=None, help="first CSV (agreement)")
     parser.add_argument("--b", default=None, help="second CSV (agreement)")
+    parser.add_argument("--adjudication", default=None,
+                        help="author verdicts CSV (consensus)")
+    parser.add_argument("--out", default=None, help="output CSV (consensus)")
     parser.add_argument("--strict-pointers", action="store_true",
                         help="D8 ablation replay (pre-D8 pointer semantics)")
     parser.add_argument("--sample-seed", type=int, default=11)
@@ -445,6 +485,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"wrote {normalize_external(outdir, Path(args.file))}")
     elif args.command == "agreement":
         return 0 if agreement(Path(args.a), Path(args.b)) == 0 else 1
+    elif args.command == "consensus":
+        print(f"wrote {consensus(Path(args.a), Path(args.b), Path(args.adjudication), Path(args.out))}")
     elif args.command == "kg0":
         return kg0(outdir, Path(args.external) if args.external else None)
     return 0
