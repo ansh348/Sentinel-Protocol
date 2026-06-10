@@ -518,7 +518,9 @@ reviewer's own note. Both reviewers concur on every substantive axis:
 skeletons clone a1; ORIGINAL_VALUE and baselines computed from fixtures,
 nothing hardcoded; zero unsourced operative literals; no contradiction
 values in c1; checks_run > 0 present in d1; test fixtures synthetic or
-fixture-derived only.
+fixture-derived only. The exact bytes both reviewers audited are committed
+as `decisions/d16_review_package.txt` (sha256
+1f3a6de772f44f2c2e3c73057eff23572b5ef29b7187c4810702ef98898c03ef).
 
 **Probe tolerance finalization (a priori, pre-evaluation):** by author
 ruling after review and BEFORE any evaluation run, with no trace consulted:

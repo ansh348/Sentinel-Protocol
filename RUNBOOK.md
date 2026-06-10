@@ -46,4 +46,15 @@ make ops        # operations ONLY: completions, throttles, failures,
 - Throttled window: jobs marked throttled back off exponentially (capped at
   30 minutes) and requeue automatically. The queue never dies; it waits.
 - HALT on CLI version change: the matrix must finish on one version; if the
-  CLI updated itself, pin/reinstall the recorded version before resuming.
+  CLI updated itself, pin/reinstall the recorded version
+  (`npm install -g @anthropic-ai/claude-code@<pinned>`) AND disable
+  auto-update for the matrix duration (`"env": {"DISABLE_AUTOUPDATER": "1"}`
+  in `~/.claude/settings.json`) before resuming. Fired live 2026-06-10
+  (2.1.170 -> 2.1.172 auto-update; guard halted before claiming any job).
+
+## When the matrix closes
+
+- Re-enable CLI auto-update: remove `DISABLE_AUTOUPDATER` from the env block
+  of `~/.claude/settings.json`, then update Claude Code freely. The version
+  pin in `runs/queue.sqlite` meta is released with the matrix; record the
+  closing CLI version in the wrap-up notes.
