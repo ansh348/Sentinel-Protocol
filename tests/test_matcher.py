@@ -197,7 +197,12 @@ def test_control_embedded_and_hard_stop(make_world):
     control = response.json()["tripwire_control"]
     assert control["action"] == "STOP_AND_ESCALATE"
     assert control["tripwire_id"] == "tw_pricing_endpoint_404"
-    assert control["evidence"] == {"status": 404, "path": "/pricing/quote/WID-001"}
+    evidence = control["evidence"]
+    assert evidence["status"] == 404
+    assert evidence["path"] == "/pricing/quote/WID-001"
+    # the judge always receives actual response excerpts as a floor
+    assert "endpoint_deprecated" in evidence["_response_excerpt"]
+    assert evidence["_status"] == 404
 
     # hard stop: the SAME worker's next call gets 409 + worker_noncompliance
     blocked = world.client.get("/inventory/items", headers=h)

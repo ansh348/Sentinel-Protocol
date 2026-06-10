@@ -199,18 +199,44 @@ class TripwireMatcher:
         return False
 
 
+# Compiled evidence_fields name the same observables under many spellings;
+# a too-literal resolver hands the judge all-null evidence and every genuine
+# escalation gets ruled NOISE (observed live, S5 attempt 4).
+_EVIDENCE_ALIASES = {
+    "status": "status", "status_code": "status", "http_status": "status",
+    "code": "status", "response_status": "status",
+    "path": "path", "url": "path", "endpoint": "path", "request_url": "path",
+    "method": "method", "http_method": "method",
+    "counter": "counter",
+    "body": "__body__", "response_body": "__body__", "raw_response": "__body__",
+    "response": "__body__", "raw_response_body": "__body__",
+    "passage_content": "__body__", "content": "__body__",
+}
+
+
 def build_control(tw: Tripwire, *, method: str, path: str, status: int,
                   counter: int, body: Any) -> dict:
     """The tripwire_control object embedded in the worker's tool response.
-    Evidence is resolved here so the worker can copy it with zero reasoning."""
+    Evidence is resolved here so the worker can copy it with zero reasoning.
+    The judge's frozen prompt promises "actual tool response excerpts", so a
+    response excerpt, status, and path are ALWAYS included as a floor even
+    when the compiled evidence_fields resolve to nothing."""
     meta = {"status": status, "path": path, "method": method, "counter": counter}
     evidence: dict[str, Any] = {}
     for field in tw.evidence_fields:
-        if field in meta:
-            evidence[field] = meta[field]
+        alias = _EVIDENCE_ALIASES.get(field.lower().lstrip("/_"))
+        if alias == "__body__":
+            evidence[field] = body
+        elif alias is not None:
+            evidence[field] = meta[alias]
         else:
             value = _pointer_lookup(body, field)
             evidence[field] = None if value is _MISSING else value
+    excerpt = (body if isinstance(body, str)
+               else json.dumps(body, ensure_ascii=False))
+    evidence.setdefault("_status", status)
+    evidence.setdefault("_path", path)
+    evidence.setdefault("_response_excerpt", (excerpt or "")[:600])
     return {
         "action": "STOP_AND_ESCALATE",
         "tripwire_id": tw.id,
