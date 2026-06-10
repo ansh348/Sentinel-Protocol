@@ -101,6 +101,13 @@ def _conductor_reply(argv: list[str], stdin_text: str) -> str:
         if "--system-prompt" in argv else ""
     if "--allowedTools" in argv:                      # worker
         escalate_mode = os.environ.get("FAKE_WORKER_ESCALATE", "")
+        if escalate_mode == "s2" and 'X-Worker-Id: w2"' in system_prompt:
+            # S2 naive-interrupt shape: raw anomaly, no tripwire machinery
+            return json.dumps({
+                "status": "escalated",
+                "anomaly": {"path": "/pricing/quote/WID-001", "status": 404,
+                            "detail": "endpoint returned 404 deprecation",
+                            "response_excerpt": {"error": "endpoint_deprecated"}}})
         hit = (('X-Worker-Id: w2"' in system_prompt) if escalate_mode == "1"
                # "always_w2": every redispatched w2 lineage member escalates
                # with IDENTICAL evidence (exercises the D7 dedup);
@@ -135,7 +142,12 @@ def _conductor_reply(argv: list[str], stdin_text: str) -> str:
     except ValueError:
         message = {}
     if message.get("mode") == "interrupt":
+        if os.environ.get("FAKE_ORCH_INTERRUPT") == "dismiss":
+            return json.dumps({"verdict": "dismiss",
+                               "reason": "transient anomaly; plan unaffected"})
         return json.dumps(FAKE_REVISED_PLAN)
+    if message.get("mode") == "revalidate":
+        return json.dumps({"verdict": "continue"})
     if message.get("mode") == "aggregate":
         results = message.get("results", [])
         used = [r["worker_id"] for r in results if r["status"] == "done"]

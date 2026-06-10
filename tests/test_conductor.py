@@ -170,6 +170,87 @@ def test_noise_dedup_by_evidence_hash(tmp_path, conductor_env, monkeypatch):
     assert len({r["payload"]["evidence_hash"] for r in refires}) == 1
 
 
+def _counts(events):
+    from collections import Counter
+    return Counter(e["event_type"] for e in events)
+
+
+def test_s2_naive_interrupt_reaches_orchestrator_unjudged(tmp_path, conductor_env,
+                                                          monkeypatch):
+    conductor_env(escalate=False)
+    monkeypatch.setenv("FAKE_WORKER_ESCALATE", "s2")
+    summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",
+                      system_id="S2", runs_root=tmp_path)
+    events = read_run(summary["run_dir"])
+    counts = _counts(events)
+    assert counts["judge_verdict"] == 0      # no filter tier
+    assert counts["compile"] == 0            # no tripwires
+    assert counts["tripwire_set"] == 0
+    assert counts["escalation"] == 1
+    assert counts["interrupt"] == 1          # straight to the orchestrator
+    assert summary["replans"] == 1
+    # the S2 anomaly clause is appended to every dispatched subtask
+    starts = [e for e in events if e["event_type"] == "worker_start"]
+    assert all("ANOMALY PROTOCOL" in e["payload"]["subtask"] for e in starts)
+
+
+def test_s2_orchestrator_can_dismiss(tmp_path, conductor_env, monkeypatch):
+    """M4 condition 1: dismiss/continue is a first-class interrupt verdict."""
+    conductor_env(escalate=False)
+    monkeypatch.setenv("FAKE_WORKER_ESCALATE", "s2")
+    monkeypatch.setenv("FAKE_ORCH_INTERRUPT", "dismiss")
+    summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",
+                      system_id="S2", runs_root=tmp_path)
+    events = read_run(summary["run_dir"])
+    counts = _counts(events)
+    assert counts["dismissal"] == 1
+    assert summary["replans"] == 0
+    redispatches = [e["payload"] for e in events
+                    if e["event_type"] == "redispatch"]
+    assert any(r.get("after") == "dismissal" for r in redispatches)
+    assert summary["reason"] is None         # the run ran to completion
+
+
+def test_s4_fires_reach_orchestrator_unjudged(tmp_path, conductor_env,
+                                              monkeypatch):
+    conductor_env(escalate=True)
+    summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",
+                      system_id="S4", runs_root=tmp_path)
+    events = read_run(summary["run_dir"])
+    counts = _counts(events)
+    assert counts["judge_verdict"] == 0      # judge bypassed
+    assert counts["escalation"] == 1
+    assert counts["interrupt"] == 1
+    assert counts["compile"] == 2            # recompile-on-replan applies to S4
+    assert counts["tripwire_set"] == 2
+    assert summary["replans"] == 1
+
+
+def test_s3_heartbeat_tick_unit(tmp_path, conductor_env):
+    """Unit-level: revalidation fires once per k-mark crossed; live S3 covers
+    the integrated loop."""
+    conductor_env(escalate=False)
+    from conductor.run_one import Conductor
+    conductor = Conductor(task_path=REPO_ROOT / "tasks" / "a1.yaml",
+                          system_id="S3", runs_root=tmp_path, heartbeat_k=2)
+    calls = []
+
+    class FakeResponse:
+        @staticmethod
+        def json():
+            return {"counter": 5}
+
+    conductor._admin = lambda *a, **k: FakeResponse()
+    conductor._orchestrator_turn = lambda msg, et: (
+        calls.append((msg["mode"], et)) or {"verdict": "continue"})
+    conductor._heartbeat_tick(None, {})
+    assert calls == [("revalidate", "revalidation"), ("revalidate", "revalidation")]
+    assert conductor._next_reval_mark == 6
+    conductor._heartbeat_tick(None, {})  # counter unchanged: no new marks
+    assert len(calls) == 2
+    conductor.trace.close()
+
+
 def test_noise_streak_installs_cooldown(tmp_path, conductor_env, monkeypatch):
     """D11: two consecutive NOISE-class instances on one tripwire install the
     world-side cooldown (visible as cooldown_installed on the redispatch)."""

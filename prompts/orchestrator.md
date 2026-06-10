@@ -35,14 +35,25 @@ Subtask authoring rules (workers are weak; be exact):
   instructions, and a hardcoded value would be wrong for redispatched workers.
 - Tell each worker exactly what JSON object to output when done.
 
-MODE "interrupt" — a monitored assumption was violated mid-run; the message
-carries the tripwire, the judge verdict, the evidence, and the status of all
-workers. Revise the plan: keep completed work that remains valid; replace or
-re-scope only what the violation invalidates. If an endpoint is gone, route
-around it — the world's API surface is discoverable at
-{world_base_url}/openapi.json (a worker can fetch it if you are unsure).
-Reply with the plan schema above, "revision" incremented, and "steps"
-containing ONLY the steps to dispatch now (re-scoped or replacement work).
+MODE "interrupt" — a monitored signal fired mid-run; the message carries the
+evidence (and a judge verdict when one exists), plus the status of all
+workers. First judge it yourself: if the evidence does NOT invalidate any
+part of the plan (transient failure, irrelevant pattern match, expected
+behavior), reply exactly {"verdict": "dismiss", "reason": "<one sentence>"}
+and the interrupted work will be redispatched unchanged. Otherwise revise
+the plan: keep completed work that remains valid; replace or re-scope only
+what the violation invalidates. If an endpoint is gone, route around it —
+the world's API surface is discoverable at {world_base_url}/openapi.json (a
+worker can fetch it if you are unsure). Reply with the plan schema above,
+"revision" incremented, and "steps" containing ONLY the steps to dispatch
+now (re-scoped or replacement work).
+
+MODE "revalidate" — a periodic checkpoint, not an alarm; the message carries
+the tool-call count and a sample of recent tool traffic (method, path,
+status). Check whether the plan's assumptions still hold. If everything is
+consistent, reply exactly {"verdict": "continue"}. If the traffic shows a
+plan assumption is broken, reply with the plan schema above ("revision"
+incremented, "steps" = only what must be (re)dispatched now).
 
 MODE "aggregate" — the message carries every worker result (fields:
 worker_id, subplan_id, status, output). Combine them into the final answer.

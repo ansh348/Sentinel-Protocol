@@ -340,13 +340,17 @@ values), so each recurrence was judged fresh — 12 correct NOISE verdicts and
 the escalation budget burned before the noise drained ($0.49, no replan).
 
 **Policy:**
-1. After **K=2 consecutive NOISE-class instances** on the same tripwire it
-   enters cooldown: further matches emit `suppressed_refire`
-   (`where: cooldown`) with no control embedded and no judge call.
-   *Interpretation note (flagged for veto):* the streak counts NOISE verdicts
-   AND D7-deduped recurrences of already-NOISE'd evidence — a deduped
-   recurrence carries a standing adjudication, and a verdicts-only streak
-   could never converge on an identical-evidence loop.
+1. After **K=2 consecutive NOISE VERDICTS** on the same tripwire it enters
+   cooldown: further matches emit `suppressed_refire` (`where: cooldown`)
+   with no control embedded and no judge call.
+   *Considered and rejected (author veto):* counting D7-deduped recurrences
+   of already-NOISE'd evidence toward the streak. Rationale: D7 already
+   makes identical-evidence loops nearly free (deduped without a judge
+   call), so they need no cooldown; D11 exists for distinct-evidence noise,
+   which verdicts-only counting handles. Counting recurrences would enter
+   cooldown after a single verdict and eat novel same-status-class evidence
+   for near-zero savings. The escalation ceiling (52) remains the hard stop
+   for pathological identical-evidence churn.
 2. Exit conditions: a match whose evidence differs in status-class from EVERY
    NOISE'd instance (different `_status`, or any declared field transitioning
    null<->non-null) exits the cooldown and is treated as a normal fire; a

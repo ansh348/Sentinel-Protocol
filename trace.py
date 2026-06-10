@@ -53,6 +53,9 @@ EVENT_TYPES = frozenset({
     # matcher-suppressed match (where=matcher) or an escalation deduped by
     # (tripwire_id, evidence_hash) without re-judgment (where=conductor).
     "suppressed_refire",
+    # M4 condition 1: in unjudged routes (S2/S4) the orchestrator may judge a
+    # raw anomaly itself and dismiss it instead of replanning.
+    "dismissal",
 })
 
 USAGE_FIELDS = ("input_tokens", "output_tokens", "cost_usd", "model", "session_id")
