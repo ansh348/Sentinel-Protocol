@@ -33,13 +33,14 @@ def test_schema_drift_pricing(make_world):
 
     before = world.client.get("/pricing/quote/WID-001", headers=h).json()
     assert isinstance(before["unit_price"], float)
-    assert "price_cents" not in before
+    assert "price" not in before
 
     inject(world.client, "schema_drift", target="pricing")
 
     after = world.client.get("/pricing/quote/WID-001", headers=h).json()
-    assert "unit_price" not in after
-    assert after["price_cents"] == int(round(before["unit_price"] * 100))
+    # D18: non-self-describing rename; units silently become integer cents
+    assert "unit_price" not in after and "price_cents" not in after
+    assert after["price"] == int(round(before["unit_price"] * 100))
     assert after["currency"] == "USD"
 
 
@@ -67,15 +68,17 @@ def test_token_expiry(make_world):
 
     applied = inject(world.client, "token_expiry")
     assert applied["tokens_invalidated"] == 1
+    assert applied["issuance_suspended"] is True
 
     # 401 on the next call with the revoked token
     response = world.client.get("/inventory/items", headers=h)
     assert response.status_code == 401
     assert response.json()["detail"]["error"] == "invalid_token"
 
-    # re-authentication issues a fresh, valid token (real expiry semantics)
-    h2 = auth_headers(get_token(world.client))
-    assert world.client.get("/inventory/items", headers=h2).status_code == 200
+    # D19 hard expiry: the refresh path 401s too — no silent re-auth recovery
+    refresh = world.client.post("/auth/token", headers={"X-Worker-Id": "w1"})
+    assert refresh.status_code == 401
+    assert refresh.json()["detail"]["error"] == "token_issuance_suspended"
 
 
 def test_doc_contradiction(make_world):

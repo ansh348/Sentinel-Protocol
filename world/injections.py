@@ -34,11 +34,15 @@ def _schema_drift(state: WorldState, params: dict[str, Any]) -> dict[str, Any]:
     target = params.get("target", "pricing")
     if target == "pricing":
         state.pricing_drift = True
+        # D18: the drifted field name must not self-describe the unit change
+        # (night-0 showed "price_cents" let the batch remap without replanning),
+        # so the rename target is the generic "price" while values silently
+        # switch to integer cents.
         return {
             "type": "schema_drift",
             "target": "pricing",
-            "rename": {"unit_price": "price_cents"},
-            "units": "dollars -> integer cents",
+            "rename": {"unit_price": "price"},
+            "units": "dollars -> integer cents (silent)",
         }
     if target == "repo_config":
         state.repo_files["config/settings.yaml"] = DRIFTED_SETTINGS_YAML
@@ -52,8 +56,13 @@ def _schema_drift(state: WorldState, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _token_expiry(state: WorldState, params: dict[str, Any]) -> dict[str, Any]:
+    # D19 hard expiry: revoke every active token AND suspend issuance, so the
+    # refresh path 401s too and recovery requires an orchestrator-level
+    # replan, not a worker retry (night-0 showed silent re-auth recovery).
     n = state.invalidate_tokens()
-    return {"type": "token_expiry", "tokens_invalidated": n}
+    state.auth_locked = True
+    return {"type": "token_expiry", "tokens_invalidated": n,
+            "issuance_suspended": True}
 
 
 def _doc_contradiction(state: WorldState, params: dict[str, Any]) -> dict[str, Any]:

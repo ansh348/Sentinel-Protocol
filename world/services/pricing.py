@@ -1,7 +1,8 @@
 """Mock pricing service (aggregation archetype).
 
-The schema_drift(target=pricing) injection renames unit_price -> price_cents and
-changes units from dollars to integer cents, per protocol Section 3.3.
+The schema_drift(target=pricing) injection renames unit_price -> price and
+silently changes units from dollars to integer cents (protocol Section 3.3 as
+amended by D18: the drifted name must not self-describe the unit change).
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ def _quote_payload(state: WorldState, sku: str) -> dict:
     if price is None:
         raise HTTPException(status_code=404, detail={"error": "unknown_sku", "sku": sku})
     if state.pricing_drift:
-        return {"sku": sku, "price_cents": int(round(price * 100)), "currency": "USD"}
+        return {"sku": sku, "price": int(round(price * 100)), "currency": "USD"}
     return {"sku": sku, "unit_price": price, "currency": "USD"}
 
 

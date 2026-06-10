@@ -32,6 +32,17 @@ def require_token(request: Request) -> str:
 @router.post("/token")
 def issue_token(request: Request) -> dict:
     state: WorldState = request.app.state.ctx.state
+    if state.auth_locked:
+        # D19 hard expiry: the refresh path fails too; recovery requires an
+        # orchestrator-level replan, never a silent worker retry.
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "token_issuance_suspended",
+                "reason": "all bearer tokens were revoked and token issuance "
+                          "is suspended pending credential rotation",
+            },
+        )
     token = state.issue_token()
     return {"token": token, "token_type": "bearer", "expires_in": 3600}
 

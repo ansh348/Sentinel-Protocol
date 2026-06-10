@@ -257,6 +257,9 @@ class WorldState:
         # mutation flags written by world.injections
         self.removed_routes: list[str] = []
         self.pricing_drift: bool = False
+        # D19 hard expiry: once token_expiry fires, issuance is suspended too
+        # (POST /auth/token 401s), so workers cannot silently re-auth.
+        self.auth_locked: bool = False
         self.trapped_gates: list[str] = []
         self.admin_injections: list[dict[str, Any]] = []
 
