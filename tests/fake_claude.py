@@ -72,9 +72,71 @@ def payload(result_text: str, cost: float = 0.01) -> dict:
     }
 
 
+FAKE_PLAN = {
+    "plan_id": "a1-plan", "revision": 0,
+    "steps": [
+        {"subplan_id": "s2", "worker_id": "w1",
+         "subtask": "Fetch inventory for all SKUs."},
+        {"subplan_id": "s3", "worker_id": "w2",
+         "subtask": "Fetch pricing quotes for all SKUs."},
+        {"subplan_id": "s4", "worker_id": "w3",
+         "subtask": "Fetch us-east shipping rates for all SKUs."},
+    ],
+    "aggregation": "Verify every SKU has price, quantity, warehouse, shipping.",
+}
+
+FAKE_REVISED_PLAN = {
+    "plan_id": "a1-plan", "revision": 1,
+    "steps": [
+        {"subplan_id": "s3", "worker_id": "w2",
+         "subtask": "Fetch pricing via GET /pricing/quotes?sku= instead."},
+    ],
+    "aggregation": "Same checks with the replacement pricing source.",
+}
+
+
+def _conductor_reply(argv: list[str], stdin_text: str) -> str:
+    """Role-aware fake for offline conductor tests."""
+    system_prompt = argv[argv.index("--system-prompt") + 1] \
+        if "--system-prompt" in argv else ""
+    if "--allowedTools" in argv:                      # worker
+        if (os.environ.get("FAKE_WORKER_ESCALATE") == "1"
+                and 'X-Worker-Id: w2"' in system_prompt):
+            return json.dumps({
+                "status": "escalated",
+                "tripwire_id": "tw_pricing_endpoint_404",
+                "evidence": {"status": 404, "path": "/pricing/quote/WID-001"}})
+        return json.dumps({"status": "done", "result": {"data": "fake"}})
+    if system_prompt.startswith("You are the Sentinel, the monitoring compiler"):
+        return json.dumps(VALID_TRIPWIRE_SET)
+    if system_prompt.startswith("You are the Sentinel acting as escalation judge"):
+        return json.dumps(VALID_VERDICT)
+    # orchestrator
+    try:
+        message = json.loads(stdin_text)
+    except ValueError:
+        message = {}
+    if message.get("mode") == "interrupt":
+        return json.dumps(FAKE_REVISED_PLAN)
+    if message.get("mode") == "aggregate":
+        results = message.get("results", [])
+        used = [r["worker_id"] for r in results if r["status"] == "done"]
+        discarded = [r["worker_id"] for r in results if r["status"] != "done"]
+        return json.dumps({"final_report": {"fake": True}, "used": used,
+                           "discarded": discarded, "redo": []})
+    return json.dumps(FAKE_PLAN)
+
+
 def main() -> int:
-    sys.stdin.read()
+    if "--version" in sys.argv:
+        print("0.0.0-fake (fake claude)")
+        return 0
+    stdin_text = sys.stdin.read()
     mode = os.environ.get("FAKE_CLAUDE_MODE", "ok")
+
+    if mode == "conductor":
+        print(json.dumps(payload(_conductor_reply(sys.argv, stdin_text))))
+        return 0
 
     if mode == "sleep":
         time.sleep(30)

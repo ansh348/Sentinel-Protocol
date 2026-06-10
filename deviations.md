@@ -89,3 +89,44 @@ The first authenticated probes confirmed `total_cost_usd` IS populated under
 subscription billing (protocol §3.6 asked this to be verified on first run).
 Token-based reconstruction at list prices is still recorded alongside the
 reported number for every invocation, per BUILD_BRIEF Section 5.
+
+---
+
+## D2 — Single-whole-payload fence stripping in sentinel output parsing
+
+**Date:** 2026-06-10 (author-approved). **Affects:** parsing of compile and
+judge outputs in `sentinel/compile.py` / `sentinel/judge.py`.
+
+**Evidence:** both attempts of the first live `make smoke` compile (task a1,
+Sonnet 4.6, CLI 2.1.170) returned an otherwise schema-valid TripwireSet wrapped
+in a ```` ```json ```` fence, despite the frozen prompt's explicit "No prose,
+no markdown fences". Under strict parsing the pre-registered one-retry budget
+is consumed by a transport wrapper and compile fails ~100% of the time,
+dead-ending the pilot on a formatting technicality that KG0's rubric
+(observable/parameterized/actionable/calibrated) does not measure.
+
+**Policy (one policy for both sentinel calls, compile and judge):**
+- Exactly one whole-payload markdown fence (```` ``` ```` or ```` ```json ````
+  wrapping the entire output) is stripped before DSL/verdict validation.
+- The boundary is the fence and nothing else: no trailing-comma repair, no
+  quote fixes, no partial-JSON salvage, ever. Prose around the JSON, multiple
+  blocks, or anything else remains schema-invalid and consumes the retry.
+- Every strip is recorded per attempt as `fences_stripped` in the compile /
+  judge_verdict trace event. Phase 0 reporting includes the fence rate as a
+  descriptive format-compliance statistic.
+
+---
+
+## D3 — `contradicts_assumption` matcher semantics (DSL clarification)
+
+**Date:** 2026-06-10 (author decision, recorded before the C-archetype runs).
+**Affects:** `world` middleware matcher only; the frozen DSL text is unchanged.
+
+A tripwire whose ONLY predicate is `contradicts_assumption` is
+**touch-triggered**: any response from the monitored retrieval source (the
+signal's type/method/url_pattern gates) fires a WARNING escalation to the
+judge, deduplicated per (tripwire, resource). Pure predicate matching stays
+pure — the middleware never evaluates whether content actually contradicts the
+assumption; that semantic comparison is exactly the judge tier's job. When
+`contradicts_assumption` is combined with other predicates, the other
+predicates decide the match as usual.

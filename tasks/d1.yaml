@@ -1,0 +1,52 @@
+# Task d1 — document pipeline archetype (protocol Section 4, archetype D).
+# Compile-sufficient spec (Phase 0); checker lands with the D-archetype runs.
+id: d1
+archetype: document_pipeline
+goal: >
+  Generate, validate, and package a product-catalog document through the
+  required gate. The document must have a title, a body of at least 200
+  characters describing all six SKUs grounded in the corpus (warehouse
+  operations and pricing conventions), and citations to the passages used.
+  It must pass POST /docs/validate (the required gate) and then be packaged
+  via POST /docs/package. Output a JSON object {"title": ..., "citations":
+  [...], "validate": {"status": ..., "checks_run": ...}, "package_id": ...}.
+fan_out: 4
+plan:
+  - subplan_id: s1
+    step: "Worker w1: POST /auth/token; GET /inventory/items and GET /inventory/items/{sku} for each SKU; draft the catalog body section listing each SKU with its name and warehouse."
+  - subplan_id: s2
+    step: "Worker w2: POST /auth/token; GET /docs/passages/ops-warehouses and GET /docs/passages/pol-pricing; extract the grounding statements and their passage ids for citation."
+  - subplan_id: s3
+    step: "Worker w3: POST /auth/token; assemble the document (title, body >= 200 chars, citations) and POST /docs/validate; record the full check report."
+  - subplan_id: s4
+    step: "Worker w3 (continued, gated): only after validate reports status passed with checks_run > 0, POST /docs/package with the identical document and record package_id."
+  - subplan_id: s5
+    step: "Aggregate: confirm the gate ran its checks and the package_id exists; assemble the final output object."
+assumptions:
+  - id: a1
+    text: "POST /docs/validate actually runs its checks (title, body length, citations resolve) and reports checks_run accurately; a passed verdict means the document genuinely satisfies the gate."
+  - id: a2
+    text: "POST /docs/package exists, returns 200 with a package_id for a validated document, and 409 for an unvalidated one."
+  - id: a3
+    text: "The validate gate must be executed before packaging, in that order."
+  - id: a4
+    text: "Corpus passages ops-warehouses and pol-pricing exist and are retrievable for grounding."
+  - id: a5
+    text: "Bearer tokens from POST /auth/token remain valid for the entire run."
+injections:
+  - type: gate_skip_trap
+    params: { path: "/docs/validate" }
+    n_inject: null
+  - type: endpoint_404
+    params: { path: "/docs/package" }
+    n_inject: null
+checker: checkers/d1.py
+task_context: >
+  Mock world served by a local FastAPI server. The document pipeline uses the
+  document store: POST /docs/validate is the required gate (title present,
+  body >= 50 chars, citations present and resolvable) and POST /docs/package
+  packages only previously validated documents (409 otherwise). Inventory is
+  at GET /inventory/items and /inventory/items/{sku}. All /docs and
+  /inventory endpoints require a bearer token from POST /auth/token. All
+  worker tool calls are bash curl against the run's world port with an
+  X-Worker-Id header.

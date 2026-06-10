@@ -36,7 +36,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import psutil
 
@@ -224,7 +224,8 @@ def run_claude(*, model: str, system_prompt: str, max_turns: int,
                resume: Optional[str] = None, isolated_home: Optional[Path] = None,
                cwd: Optional[Path] = None, timeout_s: int = HARD_TIMEOUT_S,
                claude_argv: Optional[list[str]] = None,
-               token: Optional[str] = None) -> SessionResult:
+               token: Optional[str] = None,
+               on_spawn: Optional[Callable[[int], None]] = None) -> SessionResult:
     """One headless claude -p invocation under the deviations.md D1 controls.
 
     The user prompt goes via stdin (stdin_text) for compile/judge — matching the
@@ -273,6 +274,9 @@ def run_claude(*, model: str, system_prompt: str, max_turns: int,
         env=_child_env(home, token), cwd=str(effective_cwd),
         text=True, encoding="utf-8", errors="replace",
     )
+    if on_spawn is not None:
+        # lets the conductor pause a worker mid-flight (scope-aware kill)
+        on_spawn(proc.pid)
     try:
         stdout, stderr = proc.communicate(input=stdin_text or "", timeout=timeout_s)
     except subprocess.TimeoutExpired:

@@ -46,6 +46,9 @@ EVENT_TYPES = frozenset({
     "run_end",
     "throttle",
     "error",
+    # M3 amendment 2: emitted when a tripped worker keeps calling tools after
+    # STOP_AND_ESCALATE; the middleware hard-stops it with a 409.
+    "worker_noncompliance",
 })
 
 USAGE_FIELDS = ("input_tokens", "output_tokens", "cost_usd", "model", "session_id")
@@ -105,3 +108,15 @@ def read_trace(path: str | Path) -> list[dict[str, Any]]:
     """Parse a JSONL trace back into a list of events (used by tests and analysis)."""
     with open(path, encoding="utf-8") as fh:
         return [json.loads(line) for line in fh if line.strip()]
+
+
+def read_run(run_dir: str | Path) -> list[dict[str, Any]]:
+    """Merge every *.jsonl trace in a run directory, ordered by ts. The world
+    server (separate process) and the conductor write separate files to avoid
+    cross-process interleaved appends; the event schema is identical and M6
+    metrics consume the merged stream."""
+    events: list[dict[str, Any]] = []
+    for path in sorted(Path(run_dir).glob("*.jsonl")):
+        events.extend(read_trace(path))
+    events.sort(key=lambda e: e["ts"])
+    return events

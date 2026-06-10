@@ -260,6 +260,11 @@ class WorldState:
         self.trapped_gates: list[str] = []
         self.admin_injections: list[dict[str, Any]] = []
 
+        # hard-stop enforcement (M3 amendment 2): once a worker receives
+        # STOP_AND_ESCALATE, every later call from it gets a 409 carrying the
+        # same control object. Cleared when a new tripwire set is armed.
+        self.tripped_workers: dict[str, dict[str, Any]] = {}
+
     # -- auth ---------------------------------------------------------------
 
     def issue_token(self) -> str:

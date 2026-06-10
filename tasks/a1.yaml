@@ -6,9 +6,10 @@ id: a1
 archetype: api_aggregation
 goal: >
   Produce a consolidated price-and-availability report for all six catalog
-  SKUs: for each SKU, the unit price in US dollars, the quantity in stock,
-  the warehouse holding it, and the shipping rate and carrier to the us-east
-  zone. Output one JSON object keyed by SKU.
+  SKUs as one JSON object keyed by SKU id. Each value must be an object with
+  exactly these fields: unit_price (number, US dollars), quantity (integer),
+  warehouse (string), and shipping (object with fields rate as a number and
+  carrier as a string, for the us-east zone).
 fan_out: 4
 plan:
   - subplan_id: s1

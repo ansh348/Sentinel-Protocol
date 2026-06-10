@@ -3,7 +3,7 @@
 # at a different interpreter: make test PY=python
 PY ?= ../.venv/Scripts/python.exe
 
-.PHONY: test serve smoke
+.PHONY: test serve smoke phase0
 
 test:
 	$(PY) -m pytest tests/ -q
@@ -15,3 +15,8 @@ serve:
 # One real sentinel compile on task a1's plan (billed to the subscription).
 smoke:
 	$(PY) -m sentinel.compile --task tasks/a1.yaml --outdir runs/smoke
+
+# Protocol Section 6.4: compile the four archetype plans, emit the
+# hand-scoring sheet (live calls, billed to the subscription).
+phase0:
+	$(PY) -m analysis.phase0 --outdir runs/phase0

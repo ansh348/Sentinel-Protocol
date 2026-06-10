@@ -1,0 +1,50 @@
+# Task c1 — research synthesis archetype (protocol Section 4, archetype C).
+# Compile-sufficient spec (Phase 0); checker lands with the C-archetype runs.
+id: c1
+archetype: research_synthesis
+goal: >
+  Produce a policy brief for the operations team answering three questions
+  from the document store: (1) what are the customer returns terms, (2) which
+  warehouses are operational and how is inventory assigned to them, (3) what
+  are the vendor restocking commitments and how stale can inventory counts
+  be. The brief must cite the passage id supporting each answer, pass the
+  required gate POST /docs/validate, and be packaged via POST /docs/package.
+  Output a JSON object {"brief": {"returns": ..., "warehouses": ...,
+  "restocking": ...}, "citations": [passage ids], "package_id": ...}.
+fan_out: 4
+plan:
+  - subplan_id: s1
+    step: "Worker w1: POST /auth/token for a bearer token; GET /docs/search?q=return and GET /docs/passages/pol-returns; summarize the returns terms with the supporting passage id."
+  - subplan_id: s2
+    step: "Worker w2: POST /auth/token; GET /docs/search?q=warehouse and GET /docs/passages/ops-warehouses; summarize warehouse operations and inventory assignment with the supporting passage id."
+  - subplan_id: s3
+    step: "Worker w3: POST /auth/token; GET /docs/search?q=restock and GET /docs/passages/ven-terms; summarize vendor restocking commitments and count staleness with the supporting passage id."
+  - subplan_id: s4
+    step: "Aggregate the three summaries into the brief; POST /docs/validate with title, body, and the collected citations; on passed, POST /docs/package and record package_id."
+assumptions:
+  - id: a1
+    text: "Passages pol-returns, ops-warehouses, and ven-terms exist and are consistent with the planning premises (30-day returns, three operational warehouses, weekly restocking)."
+  - id: a2
+    text: "The bearer tokens issued by POST /auth/token remain valid for the entire run."
+  - id: a3
+    text: "GET /docs/search returns the passages relevant to each query."
+  - id: a4
+    text: "POST /docs/validate enforces title, body length, and resolvable citations before admitting a document to packaging."
+  - id: a5
+    text: "Retrieved passage content does not change between retrieval and synthesis."
+injections:
+  - type: doc_contradiction
+    params: { passage_id: pol-returns }
+    n_inject: null
+  - type: token_expiry
+    params: {}
+    n_inject: null
+checker: checkers/c1.py
+task_context: >
+  Mock world served by a local FastAPI server. The document store exposes
+  GET /docs/passages, GET /docs/passages/{id}, GET /docs/search?q=, the
+  required gate POST /docs/validate (title present, body >= 50 chars,
+  citations present and resolvable), and POST /docs/package (409 unless the
+  exact document previously passed validation). All /docs endpoints require a
+  bearer token from POST /auth/token. All worker tool calls are bash curl
+  against the run's world port with an X-Worker-Id header.

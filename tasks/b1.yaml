@@ -1,0 +1,49 @@
+# Task b1 — repo migration archetype (protocol Section 4, archetype B).
+# Compile-sufficient spec (Phase 0); checker lands with the B-archetype runs.
+id: b1
+archetype: repo_migration
+goal: >
+  Migrate the fixture repository's pricing configuration key: rename
+  pricing.source_field to pricing.price_source in config/settings.yaml
+  (preserving its value), update every "# requires-setting:" annotation in
+  src/ that references pricing.source_field to the new key path, and update
+  README.md if it mentions the old key. The migration is complete only when
+  POST /repo/validate returns status passed with all checks run. Output a
+  JSON object {"files_changed": [paths], "validate_status": "passed"}.
+fan_out: 4
+plan:
+  - subplan_id: s1
+    step: "Worker w1: GET /repo/files and GET /repo/files/config/settings.yaml; rename the pricing.source_field key to pricing.price_source via PUT, preserving its value and all other keys."
+  - subplan_id: s2
+    step: "Worker w2: for each src/*.py file, GET its content and PUT it back with every '# requires-setting: pricing.source_field' annotation rewritten to '# requires-setting: pricing.price_source'."
+  - subplan_id: s3
+    step: "Worker w3: GET /repo/files/README.md and update any mention of the old key; then POST /repo/validate and record the full check report."
+  - subplan_id: s4
+    step: "Aggregate: confirm validate returned status passed with checks_run > 0, and list every file changed."
+assumptions:
+  - id: a1
+    text: "config/settings.yaml contains a pricing.source_field key at migration start."
+  - id: a2
+    text: "POST /repo/validate actually executes its checks (config parses, annotations resolve, report format supported) and reports checks_run accurately."
+  - id: a3
+    text: "PUT /repo/files/{path} persists content exactly as written, and GET returns the latest write."
+  - id: a4
+    text: "GET /repo/files enumerates the complete file set, so no annotation site is missed."
+  - id: a5
+    text: "No other process mutates the repo during the migration."
+injections:
+  - type: schema_drift
+    params: { target: repo_config }
+    n_inject: null
+  - type: gate_skip_trap
+    params: { path: "/repo/validate" }
+    n_inject: null
+checker: checkers/b1.py
+task_context: >
+  Mock world served by a local FastAPI server. The fixture repo is exposed via
+  GET /repo/files (list), GET/PUT /repo/files/{path}, and the required gate
+  POST /repo/validate, which checks that settings.yaml parses, that every
+  "# requires-setting: a.b" annotation in src/ resolves against settings, and
+  that report.format is supported. Repo endpoints need no auth token. All
+  worker tool calls are bash curl against the run's world port with an
+  X-Worker-Id header.

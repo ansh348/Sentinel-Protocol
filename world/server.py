@@ -3,13 +3,17 @@
 Locked architecture decision #3: the middleware (i) increments the global tool-call
 counter, (ii) fires the injection when the counter hits N_inject, (iii) evaluates
 the active tripwire set against each outgoing response with pure predicate matching
-(no LLM calls in the middleware, ever — M1 ships a stub matcher with no active set),
-(iv) on a match embeds a tripwire_control object in the response, and (v) appends
-every event to the run's JSONL trace.
+(no LLM calls in the middleware, ever), (iv) on a match embeds a tripwire_control
+object in the response, and (v) appends every event to the run's JSONL trace.
 
 Injection timing semantics: the counter increments when a countable request
 arrives; if it reaches N_inject the mutation is applied BEFORE the request is
 dispatched, so call number N_inject is the first to observe the broken world.
+
+Hard-stop enforcement (M3 amendment 2): after a worker receives
+STOP_AND_ESCALATE, any subsequent call from it is answered 409 with the same
+control object and a worker_noncompliance trace event — pause semantics stay
+deterministic even if the model disobeys worker.md.
 
 One process serves exactly one run (locked decision #2); the conductor starts one
 uvicorn instance per run on a port from 8400-8407 and kills it afterwards.
@@ -18,27 +22,149 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from typing import Any, Optional
 
 from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from sentinel.dsl import Tripwire, TripwireSet
 from trace import TraceWriter
 from world.injections import DEPRECATION_BODY, apply_injection
 from world.state import InjectionSpec, RunConfig, WorldState
 from world.services import auth, docs, inventory, pricing, repo, shipping
 
+_MISSING = object()
+
+
+def _pointer_lookup(body: Any, pointer: str) -> Any:
+    """Resolve a JSON pointer (RFC6901-style '/a/b'; dotted 'a.b' tolerated)
+    against a parsed response body. Returns _MISSING when unresolvable."""
+    if pointer.startswith("/"):
+        parts = [p.replace("~1", "/").replace("~0", "~")
+                 for p in pointer[1:].split("/") if p != ""]
+    elif "/" in pointer:
+        parts = [p for p in pointer.split("/") if p != ""]
+    else:
+        parts = pointer.split(".")
+    node = body
+    for part in parts:
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            return _MISSING
+    return node
+
 
 class TripwireMatcher:
-    """Pure-predicate tripwire matcher slot. M1 stub: no active tripwire set, so it
-    never matches. M2 loads a compiled TripwireSet here and returns a
-    tripwire_control dict when a predicate matches a response. Never an LLM call."""
+    """Pure-predicate tripwire matcher. Armed with a DSL-validated TripwireSet
+    via /admin/arm_tripwires; never an LLM call.
+
+    Predicate semantics: signal gates (type/method/url_pattern) AND all present
+    predicates must hold. url_pattern and order_violation tools are globs
+    (fnmatchcase) over world paths, per the DSL comment. A tripwire whose only
+    predicate is contradicts_assumption is touch-triggered per deviations.md
+    D3: any gated response fires once per (tripwire, path)."""
+
+    def __init__(self) -> None:
+        self.tripwires: list[Tripwire] = []
+        self.suppressed: set[str] = set()
+        self._touch_seen: set[tuple[str, str]] = set()
+        self._call_history: list[tuple[str, str]] = []
+
+    def arm(self, tripwire_set: TripwireSet) -> None:
+        self.tripwires = list(tripwire_set.tripwires)
+        self.suppressed.clear()
+        self._touch_seen.clear()
+        self._call_history.clear()
+
+    def suppress(self, tripwire_id: str) -> None:
+        self.suppressed.add(tripwire_id)
+
+    def get(self, tripwire_id: str) -> Optional[Tripwire]:
+        return next((t for t in self.tripwires if t.id == tripwire_id), None)
 
     def evaluate(self, *, method: str, path: str, status: int,
-                 body: Any) -> Optional[dict]:
-        return None
+                 body: Any) -> list[Tripwire]:
+        matched = [tw for tw in self.tripwires
+                   if tw.id not in self.suppressed
+                   and self._matches(tw, method, path, status, body)]
+        self._call_history.append((method.upper(), path))
+        return matched
+
+    def _matches(self, tw: Tripwire, method: str, path: str, status: int,
+                 body: Any) -> bool:
+        sig = tw.signal
+        if sig.type == "retrieval_content" and not path.startswith("/docs"):
+            return False
+        if sig.type == "auth_state" and not (status == 401
+                                             or path.startswith("/auth")):
+            return False
+        if sig.method and sig.method.upper() != method.upper():
+            return False
+        if sig.url_pattern and not fnmatchcase(path, sig.url_pattern):
+            return False
+
+        predicates: list[bool] = []
+        if sig.status_in is not None:
+            predicates.append(status in sig.status_in)
+        if sig.field_absent is not None:
+            predicates.append(_pointer_lookup(body, sig.field_absent) is _MISSING)
+        if sig.field_regex is not None:
+            hit = False
+            for pointer, pattern in sig.field_regex.items():
+                value = _pointer_lookup(body, pointer)
+                try:
+                    if value is not _MISSING and re.search(pattern, str(value)):
+                        hit = True
+                except re.error:
+                    pass
+            predicates.append(hit)
+        if sig.order_violation is not None:
+            observed = sig.order_violation.get("observed", "")
+            required = sig.order_violation.get("required_before", "")
+            if observed and fnmatchcase(path, observed):
+                seen = any(fnmatchcase(p, required)
+                           for _, p in self._call_history)
+                predicates.append(not seen)
+            else:
+                predicates.append(False)
+
+        if predicates:
+            return all(predicates)
+        if sig.contradicts_assumption is not None:
+            key = (tw.id, path)
+            if key in self._touch_seen:
+                return False
+            self._touch_seen.add(key)
+            return True
+        return False
+
+
+def build_control(tw: Tripwire, *, method: str, path: str, status: int,
+                  counter: int, body: Any) -> dict:
+    """The tripwire_control object embedded in the worker's tool response.
+    Evidence is resolved here so the worker can copy it with zero reasoning."""
+    meta = {"status": status, "path": path, "method": method, "counter": counter}
+    evidence: dict[str, Any] = {}
+    for field in tw.evidence_fields:
+        if field in meta:
+            evidence[field] = meta[field]
+        else:
+            value = _pointer_lookup(body, field)
+            evidence[field] = None if value is _MISSING else value
+    return {
+        "action": "STOP_AND_ESCALATE",
+        "tripwire_id": tw.id,
+        "severity": tw.severity.value,
+        "evidence_fields": list(tw.evidence_fields),
+        "evidence": evidence,
+    }
 
 
 @dataclass
@@ -60,7 +186,7 @@ def _parse_json(raw: bytes) -> Any:
 
 class WorldMiddleware:
     """Pure ASGI middleware so request bodies can be teed and response bodies
-    buffered (and, from M2 on, rewritten) without BaseHTTPMiddleware's caveats."""
+    buffered/rewritten without BaseHTTPMiddleware's caveats."""
 
     EXCLUDED_EXACT = frozenset({"/health", "/openapi.json"})
     EXCLUDED_PREFIXES = ("/admin/",)
@@ -103,22 +229,30 @@ class WorldMiddleware:
                 payload={"trigger": "counter", "counter": n, "injection": detail},
             )
 
+        # Hard stop for tripped workers (M3 amendment 2).
+        if worker_id in state.tripped_workers:
+            control = state.tripped_workers[worker_id]
+            body_409 = {"error": "worker_tripped",
+                        "detail": "stop and escalate; further tool calls are refused",
+                        "tripwire_control": control}
+            ctx.trace.emit(actor=worker_id, event_type="tool_call",
+                           payload={"counter": n, "method": method, "path": path,
+                                    "query": query, "body": None})
+            ctx.trace.emit(actor=worker_id, event_type="worker_noncompliance",
+                           payload={"counter": n, "path": path,
+                                    "tripwire_id": control["tripwire_id"]})
+            ctx.trace.emit(actor=worker_id, event_type="tool_response",
+                           payload={"counter": n, "status": 409, "body": body_409})
+            response = JSONResponse(status_code=409, content=body_409)
+            await response(scope, receive, send)
+            return
+
         # endpoint_404: removed routes are answered at the middleware boundary so
         # the deprecation body is identical no matter which router owned the path.
         if state.route_removed(path):
-            ctx.trace.emit(
-                actor=worker_id,
-                event_type="tool_call",
-                payload={"counter": n, "method": method, "path": path,
-                         "query": query, "body": None},
-            )
-            ctx.trace.emit(
-                actor=worker_id,
-                event_type="tool_response",
-                payload={"counter": n, "status": 404, "body": DEPRECATION_BODY},
-            )
-            response = JSONResponse(status_code=404, content=DEPRECATION_BODY)
-            await response(scope, receive, send)
+            await self._respond(scope, receive, send, n, method, path, query,
+                                worker_id, request_body=None, status=404,
+                                body=dict(DEPRECATION_BODY))
             return
 
         req_chunks: list[bytes] = []
@@ -139,24 +273,23 @@ class WorldMiddleware:
             if message["type"] == "http.response.body":
                 body_chunks.append(message.get("body", b""))
                 if not message.get("more_body", False):
-                    await self._flush(scope, send, n, method, path, query,
-                                      worker_id, req_chunks, start_message,
-                                      body_chunks)
+                    raw = b"".join(body_chunks)
+                    request_body = (_parse_json(b"".join(req_chunks))
+                                    if req_chunks else None)
+                    await self._respond(scope, receive, send, n, method, path,
+                                        query, worker_id,
+                                        request_body=request_body,
+                                        status=start_message["status"],
+                                        body=_parse_json(raw))
                 return
             await send(message)
 
         await self.app(scope, receive_teed, send_buffered)
 
-    async def _flush(self, scope: Scope, send: Send, n: int, method: str,
-                     path: str, query: str, worker_id: str,
-                     req_chunks: list[bytes], start_message: dict,
-                     body_chunks: list[bytes]) -> None:
+    async def _respond(self, scope: Scope, receive: Receive, send: Send, n: int,
+                       method: str, path: str, query: str, worker_id: str, *,
+                       request_body: Any, status: int, body: Any) -> None:
         ctx = self.ctx
-        status = start_message["status"]
-        raw = b"".join(body_chunks)
-        response_body = _parse_json(raw)
-        request_body = _parse_json(b"".join(req_chunks)) if req_chunks else None
-
         ctx.trace.emit(
             actor=worker_id,
             event_type="tool_call",
@@ -164,21 +297,46 @@ class WorldMiddleware:
                      "query": query, "body": request_body},
         )
 
-        control = ctx.matcher.evaluate(method=method, path=path, status=status,
-                                       body=response_body)
+        # Pure predicate matching against the outgoing response.
+        control: Optional[dict] = None
+        for tw in ctx.matcher.evaluate(method=method, path=path, status=status,
+                                       body=body):
+            log_only = tw.action.on_trigger == "LOG"
+            ctx.trace.emit(
+                actor="world",
+                event_type="tripwire_fire",
+                payload={"counter": n, "tripwire_id": tw.id,
+                         "severity": tw.severity.value,
+                         "on_trigger": tw.action.on_trigger,
+                         "log_only": log_only, "path": path, "status": status,
+                         "worker_id": worker_id},
+            )
+            if not log_only and control is None:
+                control = build_control(tw, method=method, path=path,
+                                        status=status, counter=n, body=body)
+
         if control is not None:
-            # M2 wires this: embed tripwire_control into the JSON body, emit a
-            # tripwire_fire event, and rewrite content-length before sending.
-            raise NotImplementedError("tripwire matching arrives in M2")
+            ctx.state.tripped_workers[worker_id] = control
+            if isinstance(body, dict):
+                body = {**body, "tripwire_control": control}
+            else:
+                body = {"tripwire_control": control, "raw": body}
 
         ctx.trace.emit(
             actor=worker_id,
             event_type="tool_response",
-            payload={"counter": n, "status": status, "body": response_body},
+            payload={"counter": n, "status": status, "body": body},
         )
 
-        await send(start_message)
-        await send({"type": "http.response.body", "body": raw, "more_body": False})
+        if isinstance(body, str):
+            response = Response(content=body, status_code=status,
+                                media_type="text/plain")
+        else:
+            response = Response(
+                content=json.dumps(body, separators=(",", ":"),
+                                   ensure_ascii=False),
+                status_code=status, media_type="application/json")
+        await response(scope, receive, send)
 
 
 def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAPI:
@@ -202,10 +360,9 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
         return {"ok": True}
 
     @app.post("/admin/inject")
-    def admin_inject(spec: InjectionSpec, request: Request) -> dict:
+    def admin_inject(spec: InjectionSpec) -> dict:
         """Tests and manual tooling ONLY. Comparative runs must use exclusively
-        the counter-triggered middleware path (M1 amendment 3); analysis can
-        verify that via the trigger field on injection_fired events."""
+        the counter-triggered middleware path (M1 amendment 3)."""
         detail = apply_injection(state, spec)
         state.admin_injections.append(detail)
         trace.emit(
@@ -215,6 +372,38 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
                      "injection": detail},
         )
         return {"ok": True, "applied": detail}
+
+    @app.post("/admin/arm_tripwires")
+    def admin_arm(tripwire_set: TripwireSet) -> dict:
+        """Arm (or re-arm after a replan) the compiled tripwire set. Resets
+        matcher state and tripped-worker flags: a fresh plan starts clean."""
+        ctx.matcher.arm(tripwire_set)
+        state.tripped_workers.clear()
+        return {"ok": True, "armed": len(tripwire_set.tripwires),
+                "plan_id": tripwire_set.plan_id}
+
+    @app.post("/admin/suppress")
+    def admin_suppress(body: dict) -> dict:
+        """Suppress one tripwire after a NOISE verdict (the sentinel tier has
+        adjudicated it; refiring would loop the same noise forever)."""
+        ctx.matcher.suppress(body["tripwire_id"])
+        return {"ok": True, "suppressed": sorted(ctx.matcher.suppressed)}
+
+    @app.get("/admin/ground_truth")
+    def admin_ground_truth() -> dict:
+        """Programmatic success checkers compare final answers against this
+        snapshot (admin path: never counted, never visible to workers)."""
+        shipping_nested: dict[str, dict[str, Any]] = {}
+        for (sku, dest), entry in state.shipping.items():
+            shipping_nested.setdefault(sku, {})[dest] = entry
+        return {
+            "prices": state.prices,
+            "inventory": state.inventory,
+            "shipping": shipping_nested,
+            "passages": {pid: {"title": p["title"], "content": p["content"]}
+                         for pid, p in state.passages.items()},
+            "repo_files": state.repo_files,
+        }
 
     @app.get("/admin/state")
     def admin_state() -> dict:
@@ -228,6 +417,9 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
             "pricing_drift": state.pricing_drift,
             "active_tokens": len(state.active_tokens),
             "revoked_tokens": len(state.revoked_tokens),
+            "armed_tripwires": [t.id for t in ctx.matcher.tripwires],
+            "suppressed_tripwires": sorted(ctx.matcher.suppressed),
+            "tripped_workers": sorted(state.tripped_workers),
         }
 
     app.add_middleware(WorldMiddleware, ctx=ctx)
