@@ -170,6 +170,27 @@ def test_noise_dedup_by_evidence_hash(tmp_path, conductor_env, monkeypatch):
     assert len({r["payload"]["evidence_hash"] for r in refires}) == 1
 
 
+def test_noise_streak_installs_cooldown(tmp_path, conductor_env, monkeypatch):
+    """D11: two consecutive NOISE-class instances on one tripwire install the
+    world-side cooldown (visible as cooldown_installed on the redispatch)."""
+    conductor_env(escalate=False)
+    monkeypatch.setenv("FAKE_WORKER_ESCALATE", "always_w2_vary")
+    monkeypatch.setenv("FAKE_JUDGE", "NOISE")
+    summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",
+                      system_id="S5", runs_root=tmp_path, max_escalations=5)
+    assert summary["reason"] == "escalation_loop"
+    events = read_run(summary["run_dir"])
+    noise_redispatches = [e["payload"] for e in events
+                          if e["event_type"] == "redispatch"
+                          and e["payload"].get("after") == "noise"]
+    installed_flags = [r["cooldown_installed"] for r in noise_redispatches]
+    assert installed_flags[0] is False, "K=1 must not cool down"
+    assert any(installed_flags), "K=2 must install the cooldown"
+    assert installed_flags.index(True) == 1, "cooldown installs exactly at K=2"
+    judges = [e for e in events if e["event_type"] == "judge_verdict"]
+    assert len(judges) >= 2  # varied evidence is judged fresh per D7
+
+
 def test_replan_cap_marks_failed(tmp_path, conductor_env):
     conductor_env(escalate=True)
     summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",

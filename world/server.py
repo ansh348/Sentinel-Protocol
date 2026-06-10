@@ -119,12 +119,16 @@ class TripwireMatcher:
         self._call_history: list[tuple[str, str]] = []
         self._pattern_mode: dict[str, Optional[str]] = {}
         self.last_suppressed: list[Tripwire] = []
+        # D11: tripwires in consecutive-NOISE cooldown -> the evidence
+        # instances (status + declared-field null pattern) that were NOISE'd
+        self.cooldowns: dict[str, list[dict]] = {}
 
     def arm(self, tripwire_set: TripwireSet) -> None:
         self.tripwires = list(tripwire_set.tripwires)
         self.suppressed.clear()
         self._touch_seen.clear()
         self._call_history.clear()
+        self.cooldowns.clear()  # D11: a fresh set resets all cooldowns
         self._pattern_mode = {
             tw.id: classify_url_pattern(tw.signal.url_pattern)
             for tw in self.tripwires if tw.signal.url_pattern
@@ -135,6 +139,30 @@ class TripwireMatcher:
 
     def suppress(self, tripwire_id: str) -> None:
         self.suppressed.add(tripwire_id)
+
+    def install_cooldown(self, tripwire_id: str, instances: list[dict]) -> None:
+        self.cooldowns[tripwire_id] = list(instances)
+
+    def cooldown_check(self, tw: Tripwire, evidence: dict) -> bool:
+        """D11 exit conditions. True -> still cooled (suppress, no control);
+        False -> exited (cooldown removed; treat as a normal fire). Exit iff
+        the new evidence differs in status-class from EVERY NOISE'd instance:
+        different _status, or any declared field transitioning null<->non-null."""
+        instances = self.cooldowns.get(tw.id)
+        if instances is None:
+            return False
+        new_status = evidence.get("_status")
+        new_nulls = sorted(f for f in tw.evidence_fields
+                           if evidence.get(f) is None)
+
+        def differs(instance: dict) -> bool:
+            return (new_status != instance.get("status")
+                    or new_nulls != sorted(instance.get("null_fields", [])))
+
+        if all(differs(i) for i in instances):
+            del self.cooldowns[tw.id]
+            return False
+        return True
 
     def get(self, tripwire_id: str) -> Optional[Tripwire]:
         return next((t for t in self.tripwires if t.id == tripwire_id), None)
@@ -406,6 +434,18 @@ class WorldMiddleware:
                          "worker_id": worker_id})
         for tw in matched:
             log_only = tw.action.on_trigger == "LOG"
+            candidate: Optional[dict] = None
+            if not log_only and tw.id in ctx.matcher.cooldowns:
+                candidate = build_control(tw, method=method, path=path,
+                                          status=status, counter=n, body=body)
+                if ctx.matcher.cooldown_check(tw, candidate["evidence"]):
+                    # D11: consecutive-NOISE cooldown eats the match, no judge
+                    ctx.trace.emit(
+                        actor="world", event_type="suppressed_refire",
+                        payload={"where": "cooldown", "counter": n,
+                                 "tripwire_id": tw.id, "path": path,
+                                 "status": status, "worker_id": worker_id})
+                    continue
             ctx.trace.emit(
                 actor="world",
                 event_type="tripwire_fire",
@@ -417,8 +457,9 @@ class WorldMiddleware:
                          "url_match_mode": ctx.matcher.pattern_mode(tw.id)},
             )
             if not log_only and control is None:
-                control = build_control(tw, method=method, path=path,
-                                        status=status, counter=n, body=body)
+                control = candidate or build_control(tw, method=method,
+                                                     path=path, status=status,
+                                                     counter=n, body=body)
 
         if control is not None:
             ctx.state.tripped_workers[worker_id] = control
@@ -503,10 +544,18 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
 
     @app.post("/admin/suppress")
     def admin_suppress(body: dict) -> dict:
-        """Suppress one tripwire after a NOISE verdict (the sentinel tier has
-        adjudicated it; refiring would loop the same noise forever)."""
+        """Manual/diagnostic hard suppression. Comparative runs use the D11
+        cooldown path instead."""
         ctx.matcher.suppress(body["tripwire_id"])
         return {"ok": True, "suppressed": sorted(ctx.matcher.suppressed)}
+
+    @app.post("/admin/cooldown")
+    def admin_cooldown(body: dict) -> dict:
+        """D11: install a consecutive-NOISE cooldown with the NOISE'd evidence
+        instances ({status, null_fields}); exits per cooldown_check."""
+        ctx.matcher.install_cooldown(body["tripwire_id"],
+                                     body.get("instances", []))
+        return {"ok": True, "cooldowns": sorted(ctx.matcher.cooldowns)}
 
     @app.get("/admin/ground_truth")
     def admin_ground_truth() -> dict:
@@ -538,6 +587,7 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
             "revoked_tokens": len(state.revoked_tokens),
             "armed_tripwires": [t.id for t in ctx.matcher.tripwires],
             "suppressed_tripwires": sorted(ctx.matcher.suppressed),
+            "cooldowns": sorted(ctx.matcher.cooldowns),
             "tripped_workers": sorted(state.tripped_workers),
         }
 

@@ -241,6 +241,10 @@ class Conductor:
         # D7: NOISE adjudications are scoped by (tripwire_id, evidence_hash);
         # the same tripwire with materially different evidence is judged fresh
         self.noise_evidence: set[tuple[str, str]] = set()
+        # D11: consecutive NOISE-class instances per tripwire; at K=2 the
+        # tripwire enters world-side cooldown. GENUINE resets the streak;
+        # re-arming resets everything.
+        self.noise_streaks: dict[str, list[dict]] = {}
         self.redo_used = False
         self.wave = 0
         self.all_calls: list[SessionResult] = []
@@ -370,6 +374,7 @@ class Conductor:
         payload = json.loads(tripwire_set.model_dump_json())
         arm_reply = self._admin("POST", "/admin/arm_tripwires", json=payload).json()
         self.armed_tripwires = {t["id"]: t for t in payload["tripwires"]}
+        self.noise_streaks.clear()  # D11: fresh set resets all cooldowns
         self.trace.emit(actor="sentinel", event_type="tripwire_set",
                         payload={"plan_id": payload["plan_id"],
                                  "revision": self.plan.revision,
@@ -484,9 +489,11 @@ class Conductor:
                                 payload={"where": "judge",
                                          "detail": "no valid verdict; treating as NOISE"})
             self.noise_evidence.add((tripwire_id, ev_hash))
-            if tripwire_id in self.armed_tripwires:
-                self._admin("POST", "/admin/suppress",
-                            json={"tripwire_id": tripwire_id})
+            # D11: a NOISE verdict — or a D7-deduped recurrence of NOISE'd
+            # evidence (the adjudication stands; recurrence confirms it) —
+            # extends the streak; at K=2 the world installs the cooldown.
+            cooldown_installed = self._note_noise_instance(tripwire_id,
+                                                           tripwire, evidence)
             # forgive the lineage: stale tripped flags must not 409 the
             # redispatched worker if it presents the old id
             base_id = outcome.instance_id.split("r")[0]
@@ -501,9 +508,12 @@ class Conductor:
                             payload={"after": "noise", "wave": self.wave,
                                      "already_noise": already_noise,
                                      "evidence_hash": ev_hash,
+                                     "cooldown_installed": cooldown_installed,
                                      "steps": [step.model_dump()]})
             self.dispatch(executor, [step], pending)
             return
+        # GENUINE: the streak is broken for this tripwire (D11 exit)
+        self.noise_streaks.pop(tripwire_id, None)
 
         # GENUINE
         if self.replans_done >= self.max_replans:
@@ -532,6 +542,25 @@ class Conductor:
                                  "revision": plan.revision,
                                  "steps": [s.model_dump() for s in plan.steps]})
         self.dispatch(executor, plan.steps, pending)
+
+    def _note_noise_instance(self, tripwire_id: str, tripwire: dict,
+                             evidence: Any) -> bool:
+        """D11: record a NOISE-class instance; install the world-side cooldown
+        at K=2 consecutive instances. Returns True when the cooldown is sent."""
+        fields = tripwire.get("evidence_fields", [])
+        is_dict = isinstance(evidence, dict)
+        instance = {
+            "status": evidence.get("_status") if is_dict else None,
+            "null_fields": sorted(f for f in fields
+                                  if not is_dict or evidence.get(f) is None),
+        }
+        streak = self.noise_streaks.setdefault(tripwire_id, [])
+        streak.append(instance)
+        if len(streak) >= 2 and tripwire_id in self.armed_tripwires:
+            self._admin("POST", "/admin/cooldown",
+                        json={"tripwire_id": tripwire_id, "instances": streak})
+            return True
+        return False
 
     @staticmethod
     def _evidence_hash(tripwire: dict, evidence: Any) -> str:

@@ -286,6 +286,8 @@ def export_audit_sample(outdir: Path, seed: int, n: int) -> Path:
     never shown to the hand auditor."""
     import random
 
+    from analysis.phase0 import SCORING_COLUMNS
+
     rows: list[dict] = []
     with open(outdir / "phase0_scoring.csv", newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))

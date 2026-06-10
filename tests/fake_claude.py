@@ -103,14 +103,24 @@ def _conductor_reply(argv: list[str], stdin_text: str) -> str:
         escalate_mode = os.environ.get("FAKE_WORKER_ESCALATE", "")
         hit = (('X-Worker-Id: w2"' in system_prompt) if escalate_mode == "1"
                # "always_w2": every redispatched w2 lineage member escalates
-               # with IDENTICAL evidence (exercises the D7 dedup)
+               # with IDENTICAL evidence (exercises the D7 dedup);
+               # "always_w2_vary": same but evidence varies per instance
+               # (exercises the D11 streak -> cooldown)
                else ("X-Worker-Id: w2" in system_prompt)
-               if escalate_mode == "always_w2" else False)
+               if escalate_mode in ("always_w2", "always_w2_vary") else False)
         if hit:
+            evidence = {"status": 404, "path": "/pricing/quote/WID-001"}
+            if escalate_mode == "always_w2_vary":
+                # vary a DECLARED evidence field so every escalation gets a
+                # distinct D7 hash and a fresh judge verdict
+                import re as _re
+                match = _re.search(r'X-Worker-Id: (\w+)"', system_prompt)
+                wid = match.group(1) if match else "w2"
+                evidence["path"] = f"/pricing/quote/{wid}"
             return json.dumps({
                 "status": "escalated",
                 "tripwire_id": "tw_pricing_endpoint_404",
-                "evidence": {"status": 404, "path": "/pricing/quote/WID-001"}})
+                "evidence": evidence})
         return json.dumps({"status": "done", "result": {"data": "fake"}})
     if system_prompt.startswith("You are the Sentinel, the monitoring compiler"):
         return json.dumps(VALID_TRIPWIRE_SET)

@@ -326,6 +326,47 @@ with a two-distinct-candidates message.
 
 ---
 
+## D11 — Per-tripwire consecutive-NOISE cooldown (interrupt-policy gating)
+
+**Date:** 2026-06-10 (author-ordered; required before further live S5 runs).
+**Affects:** conductor escalation handling + world matcher; replaces the
+earlier suppress-on-first-NOISE shortcut. The escalation backstop (52) is a
+hard safety ceiling only, never the operating mechanism.
+
+**Evidence (live S5 attempt 6 grind):** one compile produced five ungated
+tripwires; every worker lane's first /auth/token call tripped one, and per
+ratified D7 each lane's evidence was materially different (unique token
+values), so each recurrence was judged fresh — 12 correct NOISE verdicts and
+the escalation budget burned before the noise drained ($0.49, no replan).
+
+**Policy:**
+1. After **K=2 consecutive NOISE-class instances** on the same tripwire it
+   enters cooldown: further matches emit `suppressed_refire`
+   (`where: cooldown`) with no control embedded and no judge call.
+   *Interpretation note (flagged for veto):* the streak counts NOISE verdicts
+   AND D7-deduped recurrences of already-NOISE'd evidence — a deduped
+   recurrence carries a standing adjudication, and a verdicts-only streak
+   could never converge on an identical-evidence loop.
+2. Exit conditions: a match whose evidence differs in status-class from EVERY
+   NOISE'd instance (different `_status`, or any declared field transitioning
+   null<->non-null) exits the cooldown and is treated as a normal fire; a
+   replan's fresh tripwire set resets all cooldowns and streaks.
+3. Every cooldown suppression is logged (`suppressed_refire`/`cooldown`), so
+   judge-cost savings and any missed detections stay measurable. If cooldown
+   ever eats a genuine fire, KG1 is the honest place that shows it; that
+   exposure is not pre-softened.
+
+**Protocol link:** this is the minimal instance of protocol Section 5.1's
+hierarchical gating — S5's severity/scope routing presumes escalation volume
+is shaped before the judge tier, not amplified by retry loops.
+
+**Paper finding:** high-entropy evidence (volatile values such as per-call
+tokens inside `response_body`) interacts with D7 evidence-freshness to defeat
+identity-level dedup entirely; evidence-class cooldown is the consistent
+middle ground between re-judging everything and suppressing forever.
+
+---
+
 ## D8 — JSON pointer dialect normalization (third schema-transmission gap)
 
 **Date:** 2026-06-10 (flagged for author veto, same class as D2/D5).

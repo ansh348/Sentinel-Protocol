@@ -245,6 +245,42 @@ def test_log_severity_never_embeds_control(make_world):
     assert world.client.get("/admin/state").json()["tripped_workers"] == []
 
 
+def test_cooldown_suppresses_and_exits_on_status_class_change(make_world):
+    """D11: a cooled tripwire's matches are eaten (where=cooldown, no control,
+    no judge); evidence differing in status-class from EVERY NOISE'd instance
+    exits the cooldown and fires normally."""
+    world = make_world()
+    h = auth_headers(get_token(world.client))
+    arm(world.client, VALID_TRIPWIRE_SET["tripwires"][0])
+    world.client.post("/admin/inject",
+                      json={"type": "endpoint_404",
+                            "params": {"path": "/pricing/quote/*"}})
+
+    # cooldown whose instances share the 404 status-class of the next match
+    world.client.post("/admin/cooldown", json={
+        "tripwire_id": "tw_pricing_endpoint_404",
+        "instances": [{"status": 404, "null_fields": []},
+                      {"status": 404, "null_fields": []}]})
+    response = world.client.get("/pricing/quote/WID-001", headers=h)
+    assert response.status_code == 404
+    assert "tripwire_control" not in response.json()
+    events = read_trace(world.trace_path)
+    cooled = [e for e in events if e["event_type"] == "suppressed_refire"]
+    assert len(cooled) == 1 and cooled[0]["payload"]["where"] == "cooldown"
+    assert not [e for e in events if e["event_type"] == "tripwire_fire"]
+
+    # exit: every recorded instance has a DIFFERENT status-class (200)
+    world.client.post("/admin/cooldown", json={
+        "tripwire_id": "tw_pricing_endpoint_404",
+        "instances": [{"status": 200, "null_fields": ["status", "path"]}]})
+    response = world.client.get("/pricing/quote/WID-001", headers=h)
+    assert response.json()["tripwire_control"]["tripwire_id"] == \
+        "tw_pricing_endpoint_404"
+    events = read_trace(world.trace_path)
+    assert [e for e in events if e["event_type"] == "tripwire_fire"]
+    assert world.client.get("/admin/state").json().get("cooldowns", []) == []
+
+
 def test_suppression_counts_eaten_fires(make_world):
     world = make_world()
     h = auth_headers(get_token(world.client))
