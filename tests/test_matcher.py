@@ -74,6 +74,11 @@ def test_pointer_lookup():
     assert _pointer_lookup(body, "a.b") == [10, {"c": 5}]
     assert _pointer_lookup(body, "/nope") is _MISSING
     assert _pointer_lookup(None, "/x") is _MISSING
+    # D8: JSONPath dialect tolerated — third schema-transmission gap
+    assert _pointer_lookup(body, "$.unit_price") == 9.5
+    assert _pointer_lookup(body, "$.a.b") == [10, {"c": 5}]
+    assert _pointer_lookup(body, "$") == body
+    assert _pointer_lookup(body, "$.nope") is _MISSING
 
 
 # -- unit matcher -------------------------------------------------------------

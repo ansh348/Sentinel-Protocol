@@ -72,8 +72,14 @@ def classify_url_pattern(pattern: str) -> Optional[str]:
 
 
 def _pointer_lookup(body: Any, pointer: str) -> Any:
-    """Resolve a JSON pointer (RFC6901-style '/a/b'; dotted 'a.b' tolerated)
+    """Resolve a JSON pointer (RFC6901-style '/a/b'; dotted 'a.b' and
+    JSONPath-style '$.a.b' tolerated — deviations.md D8: the frozen prompt
+    cannot transmit the pointer dialect, and compiled sets use all three)
     against a parsed response body. Returns _MISSING when unresolvable."""
+    if pointer.startswith("$"):
+        pointer = pointer[1:].lstrip(".")
+        if not pointer:
+            return body
     if pointer.startswith("/"):
         parts = [p.replace("~1", "/").replace("~0", "~")
                  for p in pointer[1:].split("/") if p != ""]
