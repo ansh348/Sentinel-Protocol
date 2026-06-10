@@ -3,7 +3,7 @@
 # at a different interpreter: make test PY=python
 PY ?= ../.venv/Scripts/python.exe
 
-.PHONY: test serve smoke phase0 night0 queue ops
+.PHONY: test serve smoke phase0 night0 queue ops manifest gates freeze
 
 test:
 	$(PY) -m pytest tests/ -q
@@ -32,3 +32,15 @@ queue:
 # Morning operations report (ops only; never gate metrics).
 ops:
 	$(PY) -m conductor.ops_report
+
+# Generate the planned-matrix manifest ONCE before Phase 1; commit it.
+manifest:
+	$(PY) -m analysis.gates manifest
+
+# Kill-gate table; refuses unless the committed manifest is complete.
+gates:
+	$(PY) -m analysis.gates gates
+
+# Freeze prereg.md (protocol 6.1/6.2/6.4 verbatim + custody pins); commit it.
+freeze:
+	$(PY) -m analysis.freeze

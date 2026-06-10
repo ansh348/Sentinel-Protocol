@@ -41,19 +41,22 @@ workers. First judge it yourself: if the evidence does NOT invalidate any
 part of the plan (transient failure, irrelevant pattern match, expected
 behavior), reply exactly {"verdict": "dismiss", "reason": "<one sentence>"}
 and the interrupted work will be redispatched unchanged. Otherwise revise
-the plan: keep completed work that remains valid; replace or re-scope only
-what the violation invalidates. If an endpoint is gone, route around it —
-the world's API surface is discoverable at {world_base_url}/openapi.json (a
-worker can fetch it if you are unsure). Reply with the plan schema above,
-"revision" incremented, and "steps" containing ONLY the steps to dispatch
-now (re-scoped or replacement work).
+the plan: the message's "completed_results" lists data already gathered and
+still valid — scope replacement steps to ONLY what is missing or
+invalidated, never re-request data present in completed_results, and embed
+already-gathered values into a replacement subtask when its worker needs
+them. If an endpoint is gone, route around it — the world's API surface is
+discoverable at {world_base_url}/openapi.json (a worker can fetch it if you
+are unsure). Reply with the plan schema above, "revision" incremented, and
+"steps" containing ONLY the steps to dispatch now.
 
 MODE "revalidate" — a periodic checkpoint, not an alarm; the message carries
-the tool-call count and a sample of recent tool traffic (method, path,
-status). Check whether the plan's assumptions still hold. If everything is
-consistent, reply exactly {"verdict": "continue"}. If the traffic shows a
-plan assumption is broken, reply with the plan schema above ("revision"
-incremented, "steps" = only what must be (re)dispatched now).
+the tool-call count, a sample of recent tool traffic (method, path, status),
+and "completed_results" (data already gathered). Check whether the plan's
+assumptions still hold. If everything is consistent, reply exactly
+{"verdict": "continue"}. If the traffic shows a plan assumption is broken,
+reply with the plan schema above ("revision" incremented, "steps" = only
+what must be (re)dispatched now; never re-request completed_results data).
 
 MODE "aggregate" — the message carries every worker result (fields:
 worker_id, subplan_id, status, output). Combine them into the final answer.

@@ -1,0 +1,1172 @@
+[
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S1",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S2",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S3",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S4",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "a1",
+  "system": "S5",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": "schema_drift",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": "schema_drift",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": "schema_drift",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S1",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S2",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S3",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S4",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "b1",
+  "system": "S5",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": "doc_contradiction",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": "doc_contradiction",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": "doc_contradiction",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": "doc_contradiction",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": "doc_contradiction",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": "doc_contradiction",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": "doc_contradiction",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": "doc_contradiction",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": "doc_contradiction",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": "doc_contradiction",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": "doc_contradiction",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": "doc_contradiction",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": "doc_contradiction",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": "doc_contradiction",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": "doc_contradiction",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S1",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S2",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S3",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S4",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": "token_expiry",
+  "seed": 1
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": "token_expiry",
+  "seed": 2
+ },
+ {
+  "task": "c1",
+  "system": "S5",
+  "injection": "token_expiry",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": null,
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": null,
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": null,
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": "gate_skip_trap",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": "gate_skip_trap",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": "gate_skip_trap",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S1",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S2",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S3",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S4",
+  "injection": "endpoint_404",
+  "seed": 3
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": "endpoint_404",
+  "seed": 1
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": "endpoint_404",
+  "seed": 2
+ },
+ {
+  "task": "d1",
+  "system": "S5",
+  "injection": "endpoint_404",
+  "seed": 3
+ }
+]

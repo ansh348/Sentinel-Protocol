@@ -418,6 +418,30 @@ the vocabulary into the schema.
 
 ---
 
+## D15 — Result carryover across replans (uniform replan semantics)
+
+**Date:** 2026-06-10 (author pre-approved conditional on: demonstrated M4
+recurrence, uniformity across every replanning system including S1's redo
+path, and landing before any Phase 1 run — all three hold).
+
+**Recurrence evidence (M4 acceptance):** post-replan data loss recurred in
+every replanning system — S2's final aggregate consumed nothing (used=[],
+all six worker instances discarded, empty report); S3 carried w1/w3 forward
+but lost the replanned pricing work; S5 attempt 7 lost w1/w3's data after a
+pricing-only replan.
+
+**Mechanism (uniform):** at every replan decision the orchestrator message
+includes `completed_results` — each done worker's output — and the
+orchestrator is instructed to scope replacement steps to only what is
+missing or invalidated, never re-request carried data, and embed
+already-gathered values into replacement subtasks where needed. Applies to
+S5 judged interrupts, S2/S4 unjudged interrupts, and S3 revalidation
+replans; S1's redo path already receives all results via the aggregate
+message, so the whole matrix shares one replan semantics. Landed before any
+Phase 1 run.
+
+---
+
 ## D8 — JSON pointer dialect normalization (third schema-transmission gap)
 
 **Date:** 2026-06-10 (flagged for author veto, same class as D2/D5).

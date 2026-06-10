@@ -606,6 +606,9 @@ class Conductor:
             "workers": [{"worker_id": o.instance_id, "subplan_id": o.subplan_id,
                          "status": o.status} for o in self.outcomes.values()],
             "paused_workers": paused,
+            # D15 result carryover: replans are scoped knowing what already
+            # exists, so completed work is never blindly redone or dropped
+            "completed_results": self._completed_results(),
         }
         reply = self.replan(interrupt_payload)
 
@@ -741,11 +744,20 @@ class Conductor:
             self._run_revalidation(executor, pending, counter)
             self._next_reval_mark += self.heartbeat_k
 
+    def _completed_results(self) -> list[dict]:
+        """D15: every completed worker output, carried into replan and
+        revalidation decisions (S1's redo path already receives all results
+        via the aggregate message — uniform semantics across systems)."""
+        return [{"worker_id": o.instance_id, "subplan_id": o.subplan_id,
+                 "output": o.output}
+                for o in self.outcomes.values() if o.status == "done"]
+
     def _run_revalidation(self, executor, pending: dict[Future, str],
                           counter: int) -> None:
         raw = self._orchestrator_turn(
             {"mode": "revalidate", "tool_calls_so_far": counter,
-             "recent_traffic": self._recent_traffic()}, "revalidation")
+             "recent_traffic": self._recent_traffic(),
+             "completed_results": self._completed_results()}, "revalidation")
         if isinstance(raw, dict) and raw.get("verdict") == "continue":
             return
         try:
