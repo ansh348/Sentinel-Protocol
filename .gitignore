@@ -1,0 +1,15 @@
+# run artifacts (JSONL traces, queue db) are never committed
+runs/*
+!runs/.gitkeep
+
+# virtualenvs
+.venv/
+venv/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE
+.idea/
