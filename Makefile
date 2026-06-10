@@ -3,7 +3,7 @@
 # at a different interpreter: make test PY=python
 PY ?= ../.venv/Scripts/python.exe
 
-.PHONY: test serve
+.PHONY: test serve smoke
 
 test:
 	$(PY) -m pytest tests/ -q
@@ -11,3 +11,7 @@ test:
 # Manual world server for poking around; never used by comparative runs.
 serve:
 	$(PY) -m world.server --port 8400
+
+# One real sentinel compile on task a1's plan (billed to the subscription).
+smoke:
+	$(PY) -m sentinel.compile --task tasks/a1.yaml --outdir runs/smoke

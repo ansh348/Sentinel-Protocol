@@ -12,10 +12,16 @@ lists). Metrics are defined over tool-call counts, not timestamps.
 from __future__ import annotations
 
 import json
+import re
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+# Traces are the publishable artifact (FSE artifact evaluation), so credentials
+# must never appear in runs/*.jsonl. This guard fails loud at emit time rather
+# than redacting silently; world tokens are tok_<hex>, so no false positives.
+CREDENTIAL_PATTERN = re.compile(r"sk-ant-[A-Za-z0-9_\-]{16,}")
 
 EVENT_TYPES = frozenset({
     "run_start",
@@ -80,6 +86,10 @@ class TraceWriter:
                 raise ValueError(f"usage payload missing fields: {missing}")
             event["usage"] = usage
         line = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
+        if CREDENTIAL_PATTERN.search(line):
+            raise ValueError(
+                "credential-like material in trace event; traces are publishable "
+                "artifacts and must never contain secrets (refusing to write)")
         with self._lock:
             self._fh.write(line + "\n")
             self._fh.flush()

@@ -1,0 +1,50 @@
+# Task a1 — API aggregation archetype (protocol Section 4, archetype A).
+# n_inject values are calibrated to 50% of the batch baseline's median
+# tool-call count during manipulation checks (protocol Section 5.2); null
+# until then.
+id: a1
+archetype: api_aggregation
+goal: >
+  Produce a consolidated price-and-availability report for all six catalog
+  SKUs: for each SKU, the unit price in US dollars, the quantity in stock,
+  the warehouse holding it, and the shipping rate and carrier to the us-east
+  zone. Output one JSON object keyed by SKU.
+fan_out: 4
+plan:
+  - subplan_id: s1
+    step: "Obtain a bearer token from POST /auth/token and share it with all workers."
+  - subplan_id: s2
+    step: "Worker w1: GET /inventory/items for the SKU list, then GET /inventory/items/{sku} for each SKU; record quantity and warehouse."
+  - subplan_id: s3
+    step: "Worker w2: GET /pricing/quote/{sku} for each SKU; record unit_price (US dollars) and currency."
+  - subplan_id: s4
+    step: "Worker w3: GET /shipping/rates/{sku}?dest=us-east for each SKU; record rate and carrier."
+  - subplan_id: s5
+    step: "Aggregate all worker results into the final report keyed by SKU; verify every SKU has price, quantity, warehouse, and shipping fields."
+assumptions:
+  - id: a1
+    text: "GET /pricing/quote/{sku} exists and returns 200 with a unit_price field denominated in US dollars."
+  - id: a2
+    text: "The bearer token issued by POST /auth/token remains valid for the entire run."
+  - id: a3
+    text: "GET /inventory/items returns the complete SKU list, and per-SKU lookups return quantity and warehouse."
+  - id: a4
+    text: "GET /shipping/rates/{sku}?dest=us-east returns a rate and carrier for every SKU."
+  - id: a5
+    text: "Prices, quantities, and rates are stable for the duration of the run."
+injections:
+  - type: endpoint_404
+    params: { path: "/pricing/quote/*" }
+    n_inject: null
+  - type: schema_drift
+    params: { target: pricing }
+    n_inject: null
+  - type: token_expiry
+    params: {}
+    n_inject: null
+checker: checkers/a1.py
+task_context: >
+  Mock retail world served by a local FastAPI server. Services: auth (bearer
+  tokens), inventory, pricing, shipping, document store, fixture repo. All
+  worker tool calls are bash curl requests against the run's world port, with
+  an X-Worker-Id header. Six SKUs exist; four shipping destination zones.
