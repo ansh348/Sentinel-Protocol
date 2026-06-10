@@ -81,6 +81,18 @@ class Dismiss(BaseModel):
     reason: str = ""
 
 
+# Appended to EVERY subtask in EVERY system (uniform, so no comparative
+# bias): the brief-mandated tool permission is a prefix match on
+# "curl http://localhost:{port}/", and workers that write flags before the
+# URL get hard permission denials (observed live: an S4 run where zero worker
+# requests reached the world). worker.md is frozen; subtask text is per-run
+# conductor content.
+WORKER_TOOL_RULE = (
+    "\n\nTOOL RULE (mandatory): write every curl command with the URL "
+    "IMMEDIATELY after `curl` and all flags AFTER the URL, e.g. "
+    'curl {base}/auth/token -s -X POST -H "X-Worker-Id: <your id>". '
+    "Commands with flags before the URL are rejected by your tool permission.")
+
 # Appended to every subtask under S2 (locked decision #5: S2 instructs workers
 # to escalate any anomaly; the frozen worker.md is untouched — subtask text is
 # per-run content).
@@ -454,12 +466,17 @@ class Conductor:
 
     def dispatch(self, executor: ThreadPoolExecutor, steps: list[PlanStep],
                  pending: dict[Future, str]) -> None:
+        tool_rule = WORKER_TOOL_RULE.replace("{base}", self.base_url)
         for step in steps:
+            subtask = step.subtask
+            if tool_rule not in subtask:
+                subtask += tool_rule
             if (self.system.escalate_any_anomaly
-                    and S2_ANOMALY_CLAUSE not in step.subtask):
+                    and S2_ANOMALY_CLAUSE not in subtask):
+                subtask += S2_ANOMALY_CLAUSE
+            if subtask != step.subtask:
                 step = PlanStep(subplan_id=step.subplan_id,
-                                worker_id=step.worker_id,
-                                subtask=step.subtask + S2_ANOMALY_CLAUSE)
+                                worker_id=step.worker_id, subtask=subtask)
             instance_id = self._instance_id(step.worker_id)
             self.subplan_of[instance_id] = step.subplan_id
             future = executor.submit(self._run_worker, step, instance_id)
