@@ -604,3 +604,72 @@ and thesis-relevant; candidate exploratory arm outside the primary table.
 requires an orchestrator-level replan, never a silent worker retry. The
 redesign is type-level and therefore also applies to c1+token_expiry.
 Re-qualification happens in the D17 manipulation re-runs.
+
+---
+
+## D20 — Strict orchestrator reply reader (harness defect: silently
+## swallowed redo requests)
+
+**Date:** 2026-06-10 (author reader ruling on the night-0 flake diagnosis).
+
+**Evidence (four swallowed redo requests):** every night-0 "flaked" final —
+a1/c1/d1 clean and b1+schema_drift — was the SAME mechanism and none of the
+anticipated transport classes: the orchestrator answered aggregate mode
+with a valid plan-shaped JSON redo request (`plan_id/revision/steps/
+aggregation`; one arrived fenced and the D2 strip handled it cleanly).
+`AggregateReply`'s all-default fields plus pydantic's extras-ignoring
+validation coerced each to an empty reply (`final_report=None, redo=[]`):
+the redo was silently discarded, no redispatch happened, and the checker
+saw None. Author classification: harness defect, not agent behavior. This
+is the sixth schema-transmission gap (D2 fences, D5 globs, D8 pointer
+dialect, D14 vocabulary), compounded by permissive return-path validation.
+
+**Mechanism (uniform across all five systems):**
+1. Every orchestrator reply schema (`Plan`, `PlanStep`, `AggregateReply`,
+   `Dismiss`, and the previously unmodeled S3 `Continue`) carries
+   `extra="forbid"` and each turn must parse as exactly one sanctioned
+   shape (plan: Plan; interrupt: Dismiss XOR Plan; revalidate: Continue
+   XOR Plan; aggregate: AggregateReply). An aggregate reply coercing to
+   empty (no final_report, no redo) is REJECTED; final_report null is
+   accepted only with a non-empty redo when redo was permitted.
+2. On rejection the conductor re-prompts with one fixed template, sent as
+   `{"mode": <same mode>, "schema_error": <rendered template>}`, recorded
+   verbatim here (the {violation} and {schema} slots carry the validator
+   message and the per-mode schema restatement from
+   `conductor/run_one.py::*_SCHEMA_STR`):
+
+   "SCHEMA ERROR: your previous reply did not match the required schema and
+   was rejected. Violation: {violation}. Reply again with a SINGLE JSON
+   object matching exactly this schema and nothing else - no extra keys,
+   no markdown fences, no prose, and no other shape (a plan is NOT
+   accepted unless the schema below says so): {schema}"
+
+   Max 2 re-prompts; then the run FAILS LOUDLY with reason
+   `reply_schema_violation`. No silent path exists.
+3. Every rejection is a first-class `reply_rejected` trace event (mode,
+   attempt, violation, reply keys) and every re-prompt turn carries
+   `schema_reprompt: <n>` in its orchestrator event — per-system
+   dialect-error rates and re-prompt costs are measurable from traces.
+4. NO semantic translation: plan-dialect replies are never converted into
+   redos (order_violation precedent, D14). Frozen prompts untouched; the
+   permitted prompt-iteration remains unspent.
+
+**Finding-1 corollary (recorded for the paper):** schema constraints must
+be schema-visible inbound, and validation must be strict on the return
+path — permissive validation does not tolerate dialect drift, it masks it
+as silent data loss. The four swallowed redo requests above are the
+evidence: four orchestrators correctly detected incomplete work and asked
+to fix it, and the harness threw the requests away while reporting
+`valid=True`.
+
+**Banked-cell voiding (mechanical criterion, never outcome-based):** any
+banked cell whose final reply was class-(iv) coerced — identifiable from
+trace flags — is VOIDED and re-runs under the repaired reader; old traces
+are preserved and nothing is silently replaced. By this criterion the
+a1/c1/d1 seed-1 clean cells are VOIDED and re-run; b1 seed-1 clean is
+unaffected and stands. This supersedes D17's flakes-stand clause for
+class-(iv) cells only — D17's premise (agent formatting flake) was
+falsified by the diagnosis; genuinely flaky outputs still stand as data.
+Night-0 injected runs remain calibration-only; b1+schema_drift's QUALIFIED
+stays a calibration reading with its attribution note, final word to the
+re-run.

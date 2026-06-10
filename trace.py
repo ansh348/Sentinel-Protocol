@@ -56,6 +56,10 @@ EVENT_TYPES = frozenset({
     # M4 condition 1: in unjudged routes (S2/S4) the orchestrator may judge a
     # raw anomaly itself and dismiss it instead of replanning.
     "dismissal",
+    # D20 strict reply reader: an orchestrator reply that parsed as JSON but
+    # failed strict schema validation (each rejection precedes its re-prompt
+    # turn, so per-system dialect-error rates and costs are measurable).
+    "reply_rejected",
 })
 
 USAGE_FIELDS = ("input_tokens", "output_tokens", "cost_usd", "model", "session_id")

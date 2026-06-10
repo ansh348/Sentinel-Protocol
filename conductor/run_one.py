@@ -28,12 +28,12 @@ import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Literal, Optional
 
 import httpx
 import psutil
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from conductor.sessions import (ORCHESTRATOR_MODEL, WORKER_MODEL, SessionResult,
                                 default_scratch_root, get_cli_version, run_claude)
@@ -55,12 +55,14 @@ MAX_ESCALATIONS = 52
 
 
 class PlanStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # D20 strict reply reader
     subplan_id: str
     worker_id: str
     subtask: str
 
 
 class Plan(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # D20 strict reply reader
     plan_id: str
     revision: int = 0
     steps: list[PlanStep] = Field(min_length=1)
@@ -68,6 +70,7 @@ class Plan(BaseModel):
 
 
 class AggregateReply(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # D20 strict reply reader
     final_report: Any = None
     used: list[str] = Field(default_factory=list)
     discarded: list[str] = Field(default_factory=list)
@@ -77,8 +80,93 @@ class AggregateReply(BaseModel):
 class Dismiss(BaseModel):
     """M4 condition 1: in unjudged routes the orchestrator judges raw
     anomalies itself; dismiss/continue is a first-class interrupt verdict."""
-    verdict: str  # "dismiss"
+    model_config = ConfigDict(extra="forbid")  # D20 strict reply reader
+    verdict: Literal["dismiss"]
     reason: str = ""
+
+
+class Continue(BaseModel):
+    """S3 revalidation 'all assumptions hold' verdict (D20: previously an
+    unmodeled duck-typed check on verdict == 'continue')."""
+    model_config = ConfigDict(extra="forbid")  # D20 strict reply reader
+    verdict: Literal["continue"]
+    reason: str = ""
+
+
+class ReplyRejected(Exception):
+    """D20: an orchestrator reply that parsed as JSON but failed strict
+    schema validation, or coerced to an empty aggregate."""
+
+
+# D20 strict reply reader (night-0 finding: four orchestrator redo requests
+# arrived plan-shaped in aggregate mode and pydantic's extras-ignoring
+# validation silently coerced them to empty AggregateReplies). Every reply
+# schema forbids extras and must parse as exactly one sanctioned shape; a
+# rejection triggers the fixed re-prompt below (max 2), then the run fails
+# loudly with reason reply_schema_violation. NO semantic translation:
+# plan-dialect replies are never converted into redos (order_violation
+# precedent). Template recorded verbatim in deviations.md D20.
+MAX_REPLY_REPROMPTS = 2
+REPLY_REPROMPT_TEMPLATE = (
+    "SCHEMA ERROR: your previous reply did not match the required schema and "
+    "was rejected. Violation: {violation}. Reply again with a SINGLE JSON "
+    "object matching exactly this schema and nothing else - no extra keys, "
+    "no markdown fences, no prose, and no other shape (a plan is NOT "
+    "accepted unless the schema below says so): {schema}")
+
+PLAN_SCHEMA_STR = (
+    '{"plan_id": "<string>", "revision": <integer>, "steps": '
+    '[{"subplan_id": "<string>", "worker_id": "<string>", '
+    '"subtask": "<string>"}, ...], "aggregation": "<string>"}')
+INTERRUPT_SCHEMA_STR = (
+    PLAN_SCHEMA_STR + ' OR {"verdict": "dismiss", "reason": "<string>"}')
+AGGREGATE_SCHEMA_STR = (
+    '{"final_report": <the final task output>, "used": ["<worker id>", ...], '
+    '"discarded": ["<worker id>", ...], "redo": [{"subplan_id": "<string>", '
+    '"worker_id": "<string>", "subtask": "<string>"}, ...]} - final_report '
+    'null is allowed ONLY with a non-empty redo when redo_permitted is true')
+REVALIDATE_SCHEMA_STR = (
+    PLAN_SCHEMA_STR + ' OR {"verdict": "continue", "reason": "<string>"}')
+
+
+def validate_plan_reply(raw: Any) -> Plan:
+    try:
+        return Plan.model_validate(raw)
+    except ValidationError as exc:
+        raise ReplyRejected(f"plan schema: {str(exc)[:300]}")
+
+
+def _exactly_one_of(raw: Any, models: tuple) -> Any:
+    errors = []
+    for model in models:
+        try:
+            return model.model_validate(raw)
+        except ValidationError as exc:
+            errors.append(f"{model.__name__}: {str(exc)[:150]}")
+    raise ReplyRejected("matched no sanctioned shape - " + " | ".join(errors))
+
+
+def validate_interrupt_reply(raw: Any) -> "Plan | Dismiss":
+    return _exactly_one_of(raw, (Dismiss, Plan))
+
+
+def validate_revalidation_reply(raw: Any) -> "Plan | Continue":
+    return _exactly_one_of(raw, (Continue, Plan))
+
+
+def validate_aggregate_reply(raw: Any, redo_permitted: bool) -> AggregateReply:
+    try:
+        reply = AggregateReply.model_validate(raw)
+    except ValidationError as exc:
+        raise ReplyRejected(f"aggregate schema: {str(exc)[:300]}")
+    if reply.final_report is None:
+        if not reply.redo:
+            raise ReplyRejected(
+                "reply coerced to empty: no final_report and no redo")
+        if not redo_permitted:
+            raise ReplyRejected(
+                "final_report required: redo is not permitted in this turn")
+    return reply
 
 
 # Appended to EVERY subtask in EVERY system (uniform, so no comparative
@@ -341,7 +429,8 @@ class Conductor:
 
     # ------------------------------------------------------------ orchestrator
 
-    def _orchestrator_turn(self, message: dict, event_type: str) -> Any:
+    def _orchestrator_turn(self, message: dict, event_type: str,
+                           schema_reprompt: Optional[int] = None) -> Any:
         result = run_claude(model=ORCHESTRATOR_MODEL,
                             system_prompt=self.orch_system_prompt,
                             stdin_text=json.dumps(message),
@@ -358,6 +447,9 @@ class Conductor:
                         payload={"mode": message.get("mode"),
                                  "valid": parsed is not None,
                                  "fences_stripped": fences, "error": error,
+                                 # D20: re-prompt turns are first-class
+                                 # measurable events (dialect-error costs)
+                                 "schema_reprompt": schema_reprompt,
                                  "reply": parsed, **result.trace_payload()},
                         usage=result.trace_usage())
         if result.session_id:
@@ -367,6 +459,36 @@ class Conductor:
                            f"{event_type}: {error or 'no output'}")
         return parsed
 
+    def _validated_turn(self, message: dict, event_type: str, schema_str: str,
+                        validate: Callable[[Any], Any]) -> Any:
+        """D20 strict reply reader: strict validation, max 2 fixed re-prompts
+        (each rejection a first-class reply_rejected event), then the run
+        fails loudly with reason reply_schema_violation. No silent path; no
+        semantic translation of wrong-dialect replies."""
+        mode = message.get("mode")
+        violation = None
+        for attempt in range(1 + MAX_REPLY_REPROMPTS):
+            if attempt == 0:
+                msg = message
+            else:
+                msg = {"mode": mode,
+                       "schema_error": REPLY_REPROMPT_TEMPLATE.format(
+                           violation=violation, schema=schema_str)}
+            raw = self._orchestrator_turn(
+                msg, event_type, schema_reprompt=attempt or None)
+            try:
+                return validate(raw)
+            except ReplyRejected as exc:
+                violation = str(exc)[:300]
+                self.trace.emit(
+                    actor="conductor", event_type="reply_rejected",
+                    payload={"mode": mode, "attempt": attempt + 1,
+                             "violation": violation,
+                             "reply_keys": (sorted(raw)
+                                            if isinstance(raw, dict)
+                                            else type(raw).__name__)})
+        raise RunAbort("reply_schema_violation", f"{mode}: {violation}")
+
     def make_plan(self) -> Plan:
         template = (REPO_ROOT / "prompts" / "orchestrator.md").read_text(encoding="utf-8")
         self.orch_system_prompt = (template
@@ -374,39 +496,31 @@ class Conductor:
                                    .replace("{task_goal}", self.task["goal"].strip())
                                    .replace("{task_context}", self.task_context)
                                    .replace("{fan_out}", str(self.task.get("fan_out", 4))))
-        raw = self._orchestrator_turn({"mode": "plan"}, "plan")
-        try:
-            plan = Plan.model_validate(raw)
-        except ValidationError as exc:
-            raise RunAbort("orchestrator_invalid", f"plan schema: {str(exc)[:300]}")
+        plan = self._validated_turn({"mode": "plan"}, "plan",
+                                    PLAN_SCHEMA_STR, validate_plan_reply)
         self.plan = plan
         return plan
 
     def replan(self, interrupt_payload: dict) -> "Plan | Dismiss":
         self.trace.emit(actor="conductor", event_type="interrupt",
                         payload=interrupt_payload)
-        raw = self._orchestrator_turn({"mode": "interrupt", **interrupt_payload},
-                                      "replan")
-        if isinstance(raw, dict) and raw.get("verdict") == "dismiss":
-            return Dismiss.model_validate(raw)
-        try:
-            plan = Plan.model_validate(raw)
-        except ValidationError as exc:
-            raise RunAbort("orchestrator_invalid", f"replan schema: {str(exc)[:300]}")
-        self.plan = plan
-        return plan
+        reply = self._validated_turn({"mode": "interrupt", **interrupt_payload},
+                                     "replan", INTERRUPT_SCHEMA_STR,
+                                     validate_interrupt_reply)
+        if isinstance(reply, Dismiss):
+            return reply
+        self.plan = reply
+        return reply
 
     def aggregate(self, redo_permitted: bool) -> AggregateReply:
         results = [{"worker_id": o.instance_id, "subplan_id": o.subplan_id,
                     "status": o.status, "output": o.output}
                    for o in self.outcomes.values()]
-        raw = self._orchestrator_turn(
+        return self._validated_turn(
             {"mode": "aggregate", "results": results,
-             "redo_permitted": redo_permitted}, "aggregate")
-        try:
-            return AggregateReply.model_validate(raw)
-        except ValidationError as exc:
-            raise RunAbort("orchestrator_invalid", f"aggregate schema: {str(exc)[:300]}")
+             "redo_permitted": redo_permitted}, "aggregate",
+            AGGREGATE_SCHEMA_STR,
+            lambda raw: validate_aggregate_reply(raw, redo_permitted))
 
     # ---------------------------------------------------------------- sentinel
 
@@ -766,17 +880,14 @@ class Conductor:
 
     def _run_revalidation(self, executor, pending: dict[Future, str],
                           counter: int) -> None:
-        raw = self._orchestrator_turn(
+        reply = self._validated_turn(
             {"mode": "revalidate", "tool_calls_so_far": counter,
              "recent_traffic": self._recent_traffic(),
-             "completed_results": self._completed_results()}, "revalidation")
-        if isinstance(raw, dict) and raw.get("verdict") == "continue":
+             "completed_results": self._completed_results()}, "revalidation",
+            REVALIDATE_SCHEMA_STR, validate_revalidation_reply)
+        if isinstance(reply, Continue):
             return
-        try:
-            plan = Plan.model_validate(raw)
-        except ValidationError as exc:
-            raise RunAbort("orchestrator_invalid",
-                           f"revalidation schema: {str(exc)[:300]}")
+        plan = reply
         # heartbeat-detected invalidation: same replan flow, global pause
         if self.replans_done >= self.max_replans:
             raise RunAbort("replan_loop",

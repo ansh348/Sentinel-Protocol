@@ -76,3 +76,18 @@ the verdict stands as-written. The D17 re-run decides the banked outcome.
 a1 success=false (not a JSON object) · b1 success=true · c1 success=false
 (not a JSON object) · d1 success=false (not a JSON object). Clean-run S1
 checker flake rate at seed 1: 3/4 — batch flakes are data (D17).
+
+## Addendum (2026-06-10, D20 reader ruling): three banked cells VOIDED
+
+The flake diagnosis showed the three "flaked" clean finals (and
+b1+schema_drift's null aggregate) were class-(iv) coercions — valid
+plan-shaped redo requests silently swallowed by permissive AggregateReply
+validation (see deviations.md D20) — falsifying D17's agent-flake premise
+for these cells. Per the author's mechanical criterion, the **a1, c1, and
+d1 seed-1 clean cells are VOIDED** and re-run under the repaired strict
+reader; their original traces are preserved unchanged
+(runs/a1-S1-clean-s1, runs/c1-S1-clean-s1, runs/d1-S1-clean-s1) and
+nothing is silently replaced. **b1 seed-1 clean is unaffected and stands.**
+Night-0 injected runs remain calibration-only as recorded above;
+b1+schema_drift's QUALIFIED remains a calibration reading with its
+attribution note, final word to the D17 re-run.

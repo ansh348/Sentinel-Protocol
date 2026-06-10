@@ -241,7 +241,7 @@ def test_s3_heartbeat_tick_unit(tmp_path, conductor_env):
             return {"counter": 5}
 
     conductor._admin = lambda *a, **k: FakeResponse()
-    conductor._orchestrator_turn = lambda msg, et: (
+    conductor._orchestrator_turn = lambda msg, et, **kw: (
         calls.append((msg["mode"], et)) or {"verdict": "continue"})
     conductor._heartbeat_tick(None, {})
     assert calls == [("revalidate", "revalidation"), ("revalidate", "revalidation")]
