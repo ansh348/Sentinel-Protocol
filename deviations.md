@@ -266,6 +266,66 @@ worker id by middleware. Not built preemptively.
 
 ---
 
+## D9 — Evidence resolution: alias table, excerpt floor, all-null hash fallback
+
+**Date:** 2026-06-10 (author-confirmed item by item).
+**Affects:** `build_control` in the world middleware and the D7 evidence hash.
+
+**Evidence:** live S5 attempt 4 — compiled `evidence_fields` named real
+observables under other spellings (`status_code`, `response_body`, `sku`);
+the literal resolver produced all-null evidence and the judge correctly ruled
+every escalation NOISE, including the genuine 404.
+
+**(a) Alias table** — committed fixed artifact (`world.server._EVIDENCE_ALIASES`),
+exact mapping:
+
+| evidence_field spelling (case-insensitive, leading `/`/`_` stripped) | resolves to |
+|---|---|
+| status, status_code, http_status, code, response_status | response status |
+| path, url, endpoint, request_url | request path |
+| method, http_method | request method |
+| counter | global tool-call counter |
+| body, response_body, raw_response, response, raw_response_body, passage_content, content | full parsed response body |
+| anything else | JSON-pointer lookup into the body (D8 dialects); null if unresolvable |
+
+**(b) Excerpt floor** — every control's evidence additionally carries
+`_status`, `_path`, and `_response_excerpt` (the serialized response body,
+hard-capped at **600 UTF-8 bytes**, `world.server.EXCERPT_CAP_BYTES`), because
+the frozen judge prompt promises "actual tool response excerpts".
+
+**(c) All-null hash fallback** — when every declared evidence field resolves
+to null, the D7 hash falls back to the whole evidence object (which includes
+the floor), so a pre-injection all-null NOISE can never suppress a
+post-injection all-null GENUINE. Regression-tested. Resolved declared fields
+keep governing materiality: floor variance does not split otherwise-identical
+evidence.
+
+---
+
+## D10 — Worker final-message reader (four tiers, unique-candidate rule)
+
+**Date:** 2026-06-10 (author-ratified with tightening).
+**Affects:** conductor-side parsing of worker final messages only. D2's
+strict boundary for compile and judge outputs is untouched.
+
+**Evidence:** live S5 attempt 5 — workers escalated with correct tripwire ids
+and real evidence but wrapped the JSON in prose plus a fenced block
+("I've detected a tripwire_control ... ```json {...}```"); strict parsing
+classified them invalid_output and the escalation flow never started.
+
+**Policy:** the reader collects ALL schema-validating candidates — a JSON
+object whose `status` is `escalated`, `done`, or `blocked` — across four
+tiers: **exact** (whole message), **fence** (one whole-payload fence),
+**embedded_fence** (fenced block inside prose), **embedded_object** (raw JSON
+object inside prose). Identical candidates found by several tiers count once
+(first tier's label is recorded as `output_parse` on worker_end, keeping
+worker.md format compliance measurable). **More than one non-identical
+candidate is invalid_output** — first-match-wins could grab a JSON object
+merely quoted inside prose instead of the real payload. Regression-tested
+with a two-distinct-candidates message.
+
+---
+
 ## D8 — JSON pointer dialect normalization (third schema-transmission gap)
 
 **Date:** 2026-06-10 (flagged for author veto, same class as D2/D5).

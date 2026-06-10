@@ -27,6 +27,32 @@ def conductor_env(monkeypatch):
     return _set
 
 
+def test_evidence_hash_all_null_fallback():
+    """D9(c): a pre-injection all-null NOISE must NOT suppress a
+    post-injection all-null GENUINE — when every declared field is null the
+    whole evidence object (including the floor) is hashed instead."""
+    from conductor.run_one import Conductor
+
+    tripwire = {"id": "tw_x", "evidence_fields": ["status_code", "sku"]}
+    pre = {"status_code": None, "sku": None,
+           "_status": 200, "_path": "/pricing/quote/WID-001",
+           "_response_excerpt": '{"unit_price": 19.68}'}
+    post = {"status_code": None, "sku": None,
+            "_status": 404, "_path": "/pricing/quote/WID-001",
+            "_response_excerpt": '{"error": "endpoint_deprecated"}'}
+    assert Conductor._evidence_hash(tripwire, pre) != \
+        Conductor._evidence_hash(tripwire, post)
+    # identical evidence still dedupes
+    assert Conductor._evidence_hash(tripwire, pre) == \
+        Conductor._evidence_hash(tripwire, dict(pre))
+    # and resolved declared fields keep governing materiality: floor noise
+    # does not split otherwise-identical evidence
+    resolved_a = {"status_code": 404, "sku": "WID-001", "_response_excerpt": "A"}
+    resolved_b = {"status_code": 404, "sku": "WID-001", "_response_excerpt": "B"}
+    assert Conductor._evidence_hash(tripwire, resolved_a) == \
+        Conductor._evidence_hash(tripwire, resolved_b)
+
+
 def test_parse_worker_message_extraction_modes():
     import json
     import pytest
@@ -42,9 +68,31 @@ def test_parse_worker_message_extraction_modes():
     parsed, mode = parse_worker_message(prose)
     assert parsed == esc and mode == "embedded_fence"
     parsed, mode = parse_worker_message("Done. Result: " + json.dumps(esc))
-    assert parsed == esc and mode == "trailing_json"
+    assert parsed == esc and mode == "embedded_object"
+    # a non-payload JSON object quoted in prose does not confuse the reader
+    quoted = ('The response was {"error": "endpoint_deprecated"} so I stop.\n'
+              + json.dumps(esc))
+    assert parse_worker_message(quoted) == (esc, "embedded_object")
+    # the same payload appearing twice (fenced and quoted) is one candidate
+    twice = "```json\n" + json.dumps(esc) + "\n```\nAs stated: " + json.dumps(esc)
+    assert parse_worker_message(twice)[0] == esc
     with pytest.raises(ValueError):
         parse_worker_message("no json here at all")
+
+
+def test_parse_worker_message_rejects_distinct_candidates():
+    """D10 tightening: two distinct schema-validating objects in one message
+    is invalid_output — never pick one by tier order."""
+    import json
+    import pytest
+    from conductor.run_one import parse_worker_message
+
+    done = {"status": "done", "result": {"x": 1}}
+    esc = {"status": "escalated", "tripwire_id": "tw_y", "evidence": {}}
+    message = ("Earlier I produced " + json.dumps(done)
+               + " but then:\n```json\n" + json.dumps(esc) + "\n```")
+    with pytest.raises(ValueError, match="2 distinct"):
+        parse_worker_message(message)
 
 
 def test_s1_batch_flow(tmp_path, conductor_env):

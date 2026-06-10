@@ -39,6 +39,10 @@ from world.services import auth, docs, inventory, pricing, repo, shipping
 
 _MISSING = object()
 
+# D8 ablation switch for analysis replays ONLY (the 2x2 would-catch table):
+# True restores pre-D8 strict pointer semantics. Production runs never set it.
+STRICT_POINTERS = False
+
 # Canonical concrete paths covering every route family; used to classify
 # url_patterns at arm time (D5) and by the Phase 0 mechanized-observable bit.
 PATH_SAMPLES = (
@@ -76,7 +80,7 @@ def _pointer_lookup(body: Any, pointer: str) -> Any:
     JSONPath-style '$.a.b' tolerated — deviations.md D8: the frozen prompt
     cannot transmit the pointer dialect, and compiled sets use all three)
     against a parsed response body. Returns _MISSING when unresolvable."""
-    if pointer.startswith("$"):
+    if pointer.startswith("$") and not STRICT_POINTERS:
         pointer = pointer[1:].lstrip(".")
         if not pointer:
             return body
@@ -205,9 +209,15 @@ class TripwireMatcher:
         return False
 
 
+# D9: hard byte cap on the evidence excerpt floor (UTF-8 bytes, stated in
+# deviations.md).
+EXCERPT_CAP_BYTES = 600
+
 # Compiled evidence_fields name the same observables under many spellings;
 # a too-literal resolver hands the judge all-null evidence and every genuine
-# escalation gets ruled NOISE (observed live, S5 attempt 4).
+# escalation gets ruled NOISE (observed live, S5 attempt 4). D9: this table
+# is a committed fixed artifact; the exact mapping is restated in
+# deviations.md and must stay in sync.
 _EVIDENCE_ALIASES = {
     "status": "status", "status_code": "status", "http_status": "status",
     "code": "status", "response_status": "status",
@@ -242,7 +252,9 @@ def build_control(tw: Tripwire, *, method: str, path: str, status: int,
                else json.dumps(body, ensure_ascii=False))
     evidence.setdefault("_status", status)
     evidence.setdefault("_path", path)
-    evidence.setdefault("_response_excerpt", (excerpt or "")[:600])
+    evidence.setdefault("_response_excerpt",
+                        (excerpt or "").encode("utf-8")[:EXCERPT_CAP_BYTES]
+                        .decode("utf-8", errors="ignore"))
     return {
         "action": "STOP_AND_ESCALATE",
         "tripwire_id": tw.id,

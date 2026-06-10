@@ -247,23 +247,58 @@ def simulate_pair(task_id: str, tripwires: dict, injection: dict,
             "pre_phase_fired": ";".join(sorted(pre_fired))}
 
 
-def export_would_catch(outdir: Path) -> Path:
+def export_would_catch(outdir: Path, strict_pointers: bool = False) -> Path:
     import tempfile
+
+    import world.server as world_server
     rows = []
-    with tempfile.TemporaryDirectory() as tmp:
-        for task_id in PHASE0_TASKS:
-            tripwires = load_tripwires(outdir, task_id)
-            if tripwires is None:
-                continue
-            for injection in load_task(task_id)["injections"]:
-                rows.append(simulate_pair(task_id, tripwires, injection,
-                                          Path(tmp)))
-    path = outdir / "would_catch.csv"
+    world_server.STRICT_POINTERS = strict_pointers
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            for task_id in PHASE0_TASKS:
+                tripwires = load_tripwires(outdir, task_id)
+                if tripwires is None:
+                    continue
+                for injection in load_task(task_id)["injections"]:
+                    rows.append(simulate_pair(task_id, tripwires, injection,
+                                              Path(tmp)))
+    finally:
+        world_server.STRICT_POINTERS = False
+    name = "would_catch_strict.csv" if strict_pointers else "would_catch.csv"
+    path = outdir / name
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=["task_id", "injection", "caught",
                                                 "fresh_fired", "pre_phase_fired"])
         writer.writeheader()
         writer.writerows(rows)
+    caught = sum(1 for r in rows if r["caught"])
+    misses = [f"{r['task_id']}/{r['injection']}" for r in rows if not r["caught"]]
+    print(f"{'strict' if strict_pointers else 'normalized'}: {caught}/{len(rows)}"
+          f" | misses: {', '.join(misses) or 'none'}")
+    return path
+
+
+# ------------------------------------------------------------- audit-sample --
+
+def export_audit_sample(outdir: Path, seed: int, n: int) -> Path:
+    """Blind hand-audit export (D4): a seeded deterministic sample of the
+    compiled tripwires with ALL score columns blank — first-pass scores are
+    never shown to the hand auditor."""
+    import random
+
+    rows: list[dict] = []
+    with open(outdir / "phase0_scoring.csv", newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    sample = random.Random(seed).sample(rows, min(n, len(rows)))
+    for row in sample:
+        for col in ("observable", "parameterized", "actionable", "calibrated",
+                    "notes"):
+            row[col] = ""
+    path = outdir / f"audit_sample_seed{seed}_n{len(sample)}.csv"
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=SCORING_COLUMNS)
+        writer.writeheader()
+        writer.writerows(sample)
     return path
 
 
@@ -316,10 +351,15 @@ def kg0(outdir: Path, external_csv: Optional[Path]) -> int:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Phase 0 audit tooling (D4)")
     parser.add_argument("command",
-                        choices=["package", "observable", "would-catch", "kg0"])
+                        choices=["package", "observable", "would-catch", "kg0",
+                                 "audit-sample"])
     parser.add_argument("--outdir", default="runs/phase0")
     parser.add_argument("--external", default=None,
                         help="external rater CSV (kg0)")
+    parser.add_argument("--strict-pointers", action="store_true",
+                        help="D8 ablation replay (pre-D8 pointer semantics)")
+    parser.add_argument("--sample-seed", type=int, default=11)
+    parser.add_argument("--sample-n", type=int, default=12)
     args = parser.parse_args(argv)
     outdir = Path(args.outdir)
     if args.command == "package":
@@ -327,7 +367,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     elif args.command == "observable":
         print(f"wrote {export_observable(outdir)}")
     elif args.command == "would-catch":
-        print(f"wrote {export_would_catch(outdir)}")
+        print(f"wrote {export_would_catch(outdir, args.strict_pointers)}")
+    elif args.command == "audit-sample":
+        print(f"wrote {export_audit_sample(outdir, args.sample_seed, args.sample_n)}")
     elif args.command == "kg0":
         return kg0(outdir, Path(args.external) if args.external else None)
     return 0

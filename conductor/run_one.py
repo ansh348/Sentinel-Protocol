@@ -46,10 +46,12 @@ from world.surface import enriched_context
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PORT_POOL = range(8400, 8408)
-# Backstop against escalation loops. Must exceed the tripwire budget (12): an
-# over-broad compiled set costs one NOISE round per bad tripwire before the
-# matcher converges, and that grind is honest FIR data (KG2), not a crash.
-MAX_ESCALATIONS = 12
+# Backstop against escalation loops. Worst case is one NOISE round per
+# over-broad tripwire PER WORKER LANE (concurrent lanes trip the same
+# tripwire before its suppression lands, and per ratified D7 their
+# materially-different evidence is judged fresh): tripwire budget (12) x
+# fan-out (4) + margin. The grind is honest FIR data (KG2), not a crash.
+MAX_ESCALATIONS = 52
 
 
 class PlanStep(BaseModel):
@@ -96,35 +98,61 @@ def _parse_json_reply(text: Optional[str]) -> tuple[Any, bool]:
 
 
 _FENCED_BLOCK_RE = re.compile(r"```(?:json)?\s*\n(.*?)\n\s*```", re.DOTALL)
+_WORKER_STATUSES = ("escalated", "done", "blocked")
 
 
-def parse_worker_message(text: Optional[str]) -> tuple[Any, str]:
-    """Worker final messages per worker.md should be exactly one JSON object,
-    but Haiku workers reliably wrap it in prose + a fenced block (observed
-    live, S5 attempt 5 — escalations with correct ids and evidence died as
-    invalid_output in strict parsing). This conductor-side reader extracts the
-    payload anyway and RECORDS how (output_parse in worker_end), so worker
-    format compliance stays measurable. D2's strict boundary is untouched —
-    it governs the sentinel calls only."""
-    if not text:
-        raise ValueError("empty worker message")
+def _candidate_objects(text: str) -> list[tuple[Any, str]]:
+    """Every JSON object found in a worker final message, tagged with the
+    tier that found it: exact / fence (whole payload), embedded_fence
+    (fenced block inside prose), embedded_object (raw object inside prose)."""
+    candidates: list[tuple[Any, str]] = []
     try:
-        parsed, stripped = _parse_json_reply(text)
-        return parsed, ("fence" if stripped else "exact")
+        body, stripped = strip_markdown_fence(text)
+        candidates.append((json.loads(body.strip()),
+                           "fence" if stripped else "exact"))
     except ValueError:
         pass
-    for block in reversed(_FENCED_BLOCK_RE.findall(text)):
+    for block in _FENCED_BLOCK_RE.findall(text):
         try:
-            return json.loads(block.strip()), "embedded_fence"
+            candidates.append((json.loads(block.strip()), "embedded_fence"))
         except ValueError:
             continue
+    decoder = json.JSONDecoder()
     idx = text.find("{")
     while idx != -1:
         try:
-            return json.loads(text[idx:].strip()), "trailing_json"
+            obj, _ = decoder.raw_decode(text, idx)
+            candidates.append((obj, "embedded_object"))
         except ValueError:
-            idx = text.find("{", idx + 1)
-    raise ValueError("no JSON object in worker message")
+            pass
+        idx = text.find("{", idx + 1)
+    return candidates
+
+
+def parse_worker_message(text: Optional[str]) -> tuple[dict, str]:
+    """deviations.md D10. Worker final messages per worker.md should be
+    exactly one JSON object; live workers wrap it in prose + fences. The
+    reader collects ALL schema-validating candidates (a dict whose status is
+    escalated/done/blocked) across the tiers; the unique candidate wins, and
+    its extraction tier is recorded (output_parse in worker_end) so format
+    compliance stays measurable. More than one NON-IDENTICAL candidate is
+    invalid_output — first-match-wins could grab a JSON object merely quoted
+    inside prose instead of the real payload. D2's strict boundary for
+    compile/judge outputs is untouched."""
+    if not text:
+        raise ValueError("empty worker message")
+    distinct: list[tuple[dict, str]] = []
+    for obj, mode in _candidate_objects(text):
+        if not (isinstance(obj, dict) and obj.get("status") in _WORKER_STATUSES):
+            continue
+        if not any(obj == seen for seen, _ in distinct):
+            distinct.append((obj, mode))
+    if not distinct:
+        raise ValueError("no schema-validating worker payload in message")
+    if len(distinct) > 1:
+        raise ValueError(
+            f"{len(distinct)} distinct schema-validating payload candidates")
+    return distinct[0]
 
 
 def _pick_port() -> int:
@@ -509,10 +537,18 @@ class Conductor:
     def _evidence_hash(tripwire: dict, evidence: Any) -> str:
         """Canonical hash over the VALUES of the tripwire's evidence_fields
         (falls back to the whole escalated evidence object when the armed
-        tripwire is unknown)."""
+        tripwire is unknown).
+
+        D9 all-null fallback: when every declared field resolved to null, the
+        declared subset carries no information — a pre-injection all-null
+        NOISE would silently suppress a post-injection all-null GENUINE. In
+        that case the whole evidence object (which includes the
+        _status/_path/_response_excerpt floor) is hashed instead."""
         fields = tripwire.get("evidence_fields")
         if isinstance(evidence, dict) and fields:
-            subset = {f: evidence.get(f) for f in fields}
+            subset: Any = {f: evidence.get(f) for f in fields}
+            if all(v is None for v in subset.values()):
+                subset = evidence
         else:
             subset = evidence
         canonical = json.dumps(subset, sort_keys=True, separators=(",", ":"),
