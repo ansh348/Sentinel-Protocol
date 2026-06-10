@@ -137,6 +137,47 @@ def _keep_awake(enable: bool) -> None:
     ctypes.windll.kernel32.SetThreadExecutionState(flags)
 
 
+def launcher_guard() -> None:
+    """D21: the single-line canary is shim-transparent, so every supervisor
+    start fires one orchestrator-shaped MULTILINE probe. A cmd shim truncates
+    the command line at the first newline, destroying every flag after the
+    multiline --system-prompt — detectable as a missing result envelope.
+    HALT before claiming any job; never run a night on a mangling launcher."""
+    from conductor.sessions import WORKER_MODEL, run_claude
+    result = run_claude(
+        model=WORKER_MODEL,
+        system_prompt=("You are a test responder.\n"
+                       "Follow the user instruction exactly.\n"
+                       "Reply only with the requested word."),
+        stdin_text="Reply with the single word: pong",
+        max_turns=1, no_tools=True)
+    if result.payload is None or result.exit_code != 0:
+        raise RuntimeError(
+            "HALT: launcher mangles multiline arguments (no result envelope "
+            "from the orchestrator-shaped probe; D21). Point "
+            "TRIPWIRE_CLAUDE_BIN at a real executable, never a .cmd shim, "
+            f"then rerun. exit={result.exit_code} "
+            f"stdout_head={result.stdout[:120]!r}")
+
+
+def void_run(summary: Optional[dict]) -> bool:
+    """D21 permanent invariant: a 'done' summary whose run directory shows
+    zero tool calls AND no success_check event is a void run, never accepted
+    as done. Summaries without an inspectable run_dir (unit-test runners)
+    pass through."""
+    run_dir = (summary or {}).get("run_dir")
+    if not run_dir or not Path(run_dir).exists():
+        return False
+    from trace import read_run
+    try:
+        events = read_run(run_dir)
+    except OSError:
+        return False
+    tool_calls = sum(1 for e in events if e.get("event_type") == "tool_call")
+    checks = sum(1 for e in events if e.get("event_type") == "success_check")
+    return tool_calls == 0 and checks == 0
+
+
 def cli_version_guard(conn: sqlite3.Connection) -> str:
     """BUILD_BRIEF Section 5: halt and warn if the CLI version changes
     mid-matrix. The first supervisor run pins the baseline."""
@@ -172,6 +213,7 @@ def supervise(db_path: str | Path = DEFAULT_DB,
     conn = connect(db_path)
     token = uuid.uuid4().hex
     cli_version_guard(conn)
+    launcher_guard()  # D21: multiline probe beside the version guard
     recovered = recover_stale(conn, token)
     if recovered:
         print(f"recovered {recovered} stale running job(s) -> pending")
@@ -224,6 +266,17 @@ def supervise(db_path: str | Path = DEFAULT_DB,
                     " run_dir=?, note=? WHERE id=?",
                     (now, error, crash_run_dir, note, job["id"]))
                 print(f"job {job['id']} FAILED: {error[:120]}")
+            elif void_run(summary):
+                # D21 invariant: zero tool calls + no checker event is never
+                # accepted as done, whatever the summary claims
+                conn.execute(
+                    "UPDATE jobs SET state='failed', finished_at=?, error=?,"
+                    " run_dir=?, note=? WHERE id=?",
+                    (now, "void_run: zero tool calls and no checker event",
+                     summary.get("run_dir"),
+                     json.dumps({"cost_usd": summary.get("cost_usd")}),
+                     job["id"]))
+                print(f"job {job['id']} VOID (zero-call run) -> failed")
             else:
                 conn.execute(
                     "UPDATE jobs SET state='done', finished_at=?, run_dir=?,"

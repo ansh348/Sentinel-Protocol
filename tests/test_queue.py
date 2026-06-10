@@ -5,12 +5,24 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
 
 from conductor.queue import (claim_next, connect, enqueue, night0_jobs,
-                             recover_stale, supervise, trace_shows_throttle)
+                             recover_stale, supervise, trace_shows_throttle,
+                             void_run)
+
+FAKE = str(Path(__file__).parent / "fake_claude.py")
+
+
+@pytest.fixture(autouse=True)
+def offline_launcher(monkeypatch):
+    """D21: supervise() fires a live launcher probe at startup; route every
+    queue test's probe to the offline fake."""
+    monkeypatch.setenv("TRIPWIRE_CLAUDE_BIN", f"{sys.executable};{FAKE}")
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "conductor")
 
 
 def make_db(tmp_path) -> Path:
@@ -151,6 +163,60 @@ def test_failed_job_without_context_keeps_old_shape(tmp_path):
     assert row["state"] == "failed"
     assert row["run_dir"] is None and row["note"] is None
     assert row["error"] == "ValueError: boom"
+
+
+def test_launcher_guard_halts_on_multiline_mangling(tmp_path, monkeypatch):
+    """D21: a launcher that eats flags (prose, exit 0, no envelope) must halt
+    the supervisor before any claim — the version guard alone is blind."""
+    monkeypatch.setenv("FAKE_CLAUDE_MODE", "prose")
+    db = make_db(tmp_path)
+    enqueue(connect(db), three_jobs()[:1])
+    with pytest.raises(RuntimeError, match="HALT: launcher mangles"):
+        supervise(db, runner=lambda job: {"success": True, "run_dir": None})
+    states = [r["state"] for r in connect(db).execute("SELECT state FROM jobs")]
+    assert states == ["pending"], "nothing may be claimed past a failed guard"
+
+
+def _write_trace(run_dir: Path, event_types: list[str]) -> None:
+    from trace import TraceWriter
+    run_dir.mkdir()
+    writer = TraceWriter(run_dir / "trace.jsonl", run_id="r", seed=1,
+                         system="S1", task_id="a1")
+    for et in event_types:
+        writer.emit(actor="x", event_type=et, payload={})
+    writer.close()
+
+
+def test_void_run_invariant_rejects_zero_call_done(tmp_path):
+    """D21 permanent invariant: zero tool calls + no checker event is never
+    accepted as done, whatever the runner summary claims."""
+    db = make_db(tmp_path)
+    enqueue(connect(db), three_jobs()[:1])
+    run_dir = tmp_path / "void-run"
+    _write_trace(run_dir, ["run_start", "plan", "error", "run_end"])
+
+    counts = supervise(db, runner=lambda job: {
+        "success": False, "reason": "orchestrator_invalid",
+        "run_dir": str(run_dir), "cost_usd": 0.0}, poll_s=0.05)
+    assert counts == {"failed": 1}
+    row = connect(db).execute("SELECT * FROM jobs").fetchone()
+    assert "void_run" in row["error"]
+    assert row["run_dir"] == str(run_dir)
+
+
+def test_real_work_run_is_still_done(tmp_path):
+    db = make_db(tmp_path)
+    enqueue(connect(db), three_jobs()[:1])
+    run_dir = tmp_path / "real-run"
+    _write_trace(run_dir, ["run_start", "plan", "tool_call", "tool_response",
+                           "success_check", "run_end"])
+
+    counts = supervise(db, runner=lambda job: {
+        "success": True, "reason": None,
+        "run_dir": str(run_dir), "cost_usd": 0.2}, poll_s=0.05)
+    assert counts == {"done": 1}
+    assert void_run({"run_dir": str(run_dir)}) is False
+    assert void_run({"run_dir": None}) is False
 
 
 def test_night0_enqueue_shape():

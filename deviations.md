@@ -574,7 +574,10 @@ lengthens the post-injection runway and never weakens the manipulation.
 A-priori status: committed after the 11 clean-cell runs drained but before
 any median was computed or any trajectory length inspected — the medians
 did not exist when this rule was fixed, and it is applied mechanically
-(no stop if a fraction bites).
+(no stop if a fraction bites). A-priori status ACCEPTED by author ruling
+despite one discarded computation: that computation ran over void rows
+(the D21 zero-call empty runs) and carried zero informational content
+about real medians.
 
 ---
 
@@ -684,3 +687,59 @@ falsified by the diagnosis; genuinely flaky outputs still stand as data.
 Night-0 injected runs remain calibration-only; b1+schema_drift's QUALIFIED
 stays a calibration reading with its attribution note, final word to the
 re-run.
+
+---
+
+## D21 — Windows launcher trap: cmd shims truncate multiline arguments
+## (binary invocation override + two permanent catches)
+
+**Date:** 2026-06-10 (author ruling on the launcher-trap diagnosis).
+
+**Evidence (full diagnosis chain):**
+1. All 11 clean cells of the first post-D20 calibration phase came back
+   "done" with ZERO tool calls, no success_check event, $0 recorded cost,
+   and near-constant ~12.5 s wall — every trace held exactly
+   run_start/plan/error/run_end, the plan event showing valid=false,
+   error "empty reply", exit_code 0, empty stderr, and no result envelope
+   (num_turns null).
+2. The live canary (haiku, single-line system prompt) PASSED after the
+   failures, and direct pong probes through the production run_claude
+   recipe passed on BOTH haiku and sonnet — the basic invocation path was
+   healthy.
+3. An exact orchestrator-shaped probe (the real multiline orchestrator.md
+   system prompt, JSON stdin) reproduced the failure: exit 0 and RAW PROSE
+   on stdout ("I'm now in plan mode...") with no JSON envelope — the
+   default-persona CLI answering as if --system-prompt, --output-format,
+   and --tools were never passed.
+4. `shutil.which("claude")` resolved to the npm-created `claude.CMD` shim
+   (created by the D-ruled 2.1.170 reinstall), shadowing the native
+   `~\.local\bin\claude.exe` that night-0 actually ran (and which the
+   auto-updater had moved to 2.1.172). cmd.exe truncates a command line at
+   the first NEWLINE, so any multiline argument silently destroys every
+   flag after it, while single-line invocations (`--version`, the canary)
+   pass through untouched — the version guard and the full 97-test suite
+   were structurally blind to this class.
+5. Fix verified: invoking the npm package's real binary
+   (`...\@anthropic-ai\claude-code\bin\claude.exe`) directly via the
+   conductor's TRIPWIRE_CLAUDE_BIN override returns a valid Plan envelope
+   (1 turn, cost reported).
+
+**Cost record:** ~11 truncated-prompt sonnet generations went unrecorded
+(no envelope, est. < $0.20); queue jobs 14-24 are the operational record
+(zero-call "done" rows, reason orchestrator_invalid). Their first median
+computation was discarded as void (see D17 fraction-rule note).
+
+**Mechanism (permanent):**
+1. The conductor is launched with TRIPWIRE_CLAUDE_BIN pointed at a real
+   executable, never a .cmd shim (RUNBOOK records the export). This
+   changes how every future run invokes the binary.
+2. **Launcher preflight guard** beside the version guard: at every
+   supervisor start, one orchestrator-shaped live probe (haiku, MULTILINE
+   system prompt, --output-format json) must return a parseable result
+   envelope; no envelope means the launcher is mangling multiline
+   arguments and the queue HALTS before claiming any job. The single-line
+   canary is shim-transparent and proved blind to this class.
+3. **Void-run invariant** (permanent queue invariant, not a one-off
+   scan): a runner summary whose run directory shows zero tool calls AND
+   no success_check event is never accepted as done — the job is marked
+   failed (error void_run) with run_dir and cost persisted per CD-3.

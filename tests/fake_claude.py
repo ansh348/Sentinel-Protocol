@@ -168,6 +168,12 @@ def main() -> int:
         print(json.dumps(payload(_conductor_reply(sys.argv, stdin_text))))
         return 0
 
+    if mode == "prose":
+        # D21 launcher-trap simulation: a cmd shim that ate the flags makes
+        # the CLI answer default-persona prose with exit 0 and no envelope
+        print("I'm now in plan mode. It looks like you've initiated planning.")
+        return 0
+
     if mode == "sleep":
         time.sleep(30)
         return 0
