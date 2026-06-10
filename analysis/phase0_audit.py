@@ -304,6 +304,72 @@ def export_audit_sample(outdir: Path, seed: int, n: int) -> Path:
     return path
 
 
+# ----------------------------------------------------------- external merge --
+
+JUDGED_PROPERTIES = ("parameterized", "actionable", "calibrated")
+
+
+def normalize_external(outdir: Path, raw_csv: Path) -> Path:
+    """D4 amendment step 1: map the external rater's descriptive task_ids to
+    a1-d1 deterministically — a rater task group maps to the phase0 task whose
+    compiled tripwire-id set contains it. Mapping is logged; raw file
+    untouched; normalized copy written alongside."""
+    with open(raw_csv, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    task_sets = {}
+    for task_id in PHASE0_TASKS:
+        tripwires = load_tripwires(outdir, task_id)
+        if tripwires:
+            task_sets[task_id] = {t["id"] for t in tripwires["tripwires"]}
+    groups: dict[str, set[str]] = {}
+    for row in rows:
+        groups.setdefault(row["task_id"], set()).add(row["tripwire_id"])
+    mapping: dict[str, str] = {}
+    for raw_id, ids in groups.items():
+        matches = [t for t, s in task_sets.items() if ids <= s]
+        if len(matches) != 1:
+            raise SystemExit(f"ambiguous/unmatched task group {raw_id!r}: "
+                             f"{matches} (ids: {sorted(ids)[:3]}...)")
+        mapping[raw_id] = matches[0]
+    for row in rows:
+        row["task_id"] = mapping[row["task_id"]]
+    out = raw_csv.with_name(raw_csv.stem + "_normalized.csv")
+    with open(out, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+    log = raw_csv.with_name(raw_csv.stem + "_mapping.json")
+    log.write_text(json.dumps(mapping, indent=2), encoding="utf-8")
+    for raw_id, task in sorted(mapping.items(), key=lambda kv: kv[1]):
+        print(f"  {raw_id!r} -> {task} ({len(groups[raw_id])} tripwires)")
+    return out
+
+
+def agreement(a_csv: Path, b_csv: Path) -> int:
+    """D4 amendment step 2: bitwise agreement over 48 tripwires x 3 judged
+    properties = 144 bits, disagreement bits listed."""
+    def load(path: Path) -> dict:
+        with open(path, newline="", encoding="utf-8") as fh:
+            return {(r["task_id"], r["tripwire_id"]): r
+                    for r in csv.DictReader(fh)}
+    a, b = load(a_csv), load(b_csv)
+    keys = sorted(set(a) | set(b))
+    total, agree, disputes = 0, 0, []
+    for key in keys:
+        for prop in JUDGED_PROPERTIES:
+            total += 1
+            va = a.get(key, {}).get(prop)
+            vb = b.get(key, {}).get(prop)
+            if va == vb and va is not None:
+                agree += 1
+            else:
+                disputes.append((key[0], key[1], prop, va, vb))
+    print(f"agreement: {agree}/{total} bits ({agree/total:.1%})")
+    for task, tw, prop, va, vb in disputes:
+        print(f"  DISPUTED {task}/{tw}.{prop}: A={va} B={vb}")
+    return len(disputes)
+
+
 # --------------------------------------------------------------------- kg0 --
 
 def kg0(outdir: Path, external_csv: Optional[Path]) -> int:
@@ -354,10 +420,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Phase 0 audit tooling (D4)")
     parser.add_argument("command",
                         choices=["package", "observable", "would-catch", "kg0",
-                                 "audit-sample"])
+                                 "audit-sample", "normalize", "agreement"])
     parser.add_argument("--outdir", default="runs/phase0")
     parser.add_argument("--external", default=None,
                         help="external rater CSV (kg0)")
+    parser.add_argument("--file", default=None, help="raw CSV (normalize)")
+    parser.add_argument("--a", default=None, help="first CSV (agreement)")
+    parser.add_argument("--b", default=None, help="second CSV (agreement)")
     parser.add_argument("--strict-pointers", action="store_true",
                         help="D8 ablation replay (pre-D8 pointer semantics)")
     parser.add_argument("--sample-seed", type=int, default=11)
@@ -372,6 +441,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"wrote {export_would_catch(outdir, args.strict_pointers)}")
     elif args.command == "audit-sample":
         print(f"wrote {export_audit_sample(outdir, args.sample_seed, args.sample_n)}")
+    elif args.command == "normalize":
+        print(f"wrote {normalize_external(outdir, Path(args.file))}")
+    elif args.command == "agreement":
+        return 0 if agreement(Path(args.a), Path(args.b)) == 0 else 1
     elif args.command == "kg0":
         return kg0(outdir, Path(args.external) if args.external else None)
     return 0
