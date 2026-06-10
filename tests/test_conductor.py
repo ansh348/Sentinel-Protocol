@@ -80,6 +80,28 @@ def test_s5_escalation_judge_pause_replan_recompile(tmp_path, conductor_env):
                      "redispatch"]
 
 
+def test_noise_dedup_by_evidence_hash(tmp_path, conductor_env, monkeypatch):
+    """D7: identical (tripwire, evidence) is judged once; every further
+    escalation of the pair is a suppressed_refire, not a judge call."""
+    conductor_env(escalate=False)
+    monkeypatch.setenv("FAKE_WORKER_ESCALATE", "always_w2")
+    monkeypatch.setenv("FAKE_JUDGE", "NOISE")
+    summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",
+                      system_id="S5", runs_root=tmp_path, max_escalations=4)
+    assert summary["success"] is False
+    assert summary["reason"] == "escalation_loop"
+    events = read_run(summary["run_dir"])
+    judge_calls = [e for e in events if e["event_type"] == "judge_verdict"]
+    assert len(judge_calls) == 1, "identical evidence must be judged exactly once"
+    refires = [e for e in events if e["event_type"] == "suppressed_refire"
+               and e["payload"]["where"] == "conductor"]
+    assert len(refires) >= 2
+    assert all(r["payload"]["tripwire_id"] == "tw_pricing_endpoint_404"
+               for r in refires)
+    # all refires share the single adjudicated evidence hash
+    assert len({r["payload"]["evidence_hash"] for r in refires}) == 1
+
+
 def test_replan_cap_marks_failed(tmp_path, conductor_env):
     conductor_env(escalate=True)
     summary = run_one(task_path=REPO_ROOT / "tasks" / "a1.yaml",

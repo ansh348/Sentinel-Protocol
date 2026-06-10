@@ -235,7 +235,7 @@ def test_log_severity_never_embeds_control(make_world):
     assert world.client.get("/admin/state").json()["tripped_workers"] == []
 
 
-def test_suppression(make_world):
+def test_suppression_counts_eaten_fires(make_world):
     world = make_world()
     h = auth_headers(get_token(world.client))
     arm(world.client, VALID_TRIPWIRE_SET["tripwires"][0])
@@ -247,3 +247,10 @@ def test_suppression(make_world):
     response = world.client.get("/pricing/quote/WID-001", headers=h)
     assert response.status_code == 404
     assert "tripwire_control" not in response.json()
+    # D7: the eaten match is accounted as a suppressed_refire (where=matcher)
+    events = read_trace(world.trace_path)
+    eaten = [e for e in events if e["event_type"] == "suppressed_refire"]
+    assert len(eaten) == 1
+    assert eaten[0]["payload"]["where"] == "matcher"
+    assert eaten[0]["payload"]["tripwire_id"] == "tw_pricing_endpoint_404"
+    assert not [e for e in events if e["event_type"] == "tripwire_fire"]

@@ -49,6 +49,10 @@ EVENT_TYPES = frozenset({
     # M3 amendment 2: emitted when a tripped worker keeps calling tools after
     # STOP_AND_ESCALATE; the middleware hard-stops it with a 409.
     "worker_noncompliance",
+    # D7: a fire/escalation eaten by the NOISE interrupt policy — either a
+    # matcher-suppressed match (where=matcher) or an escalation deduped by
+    # (tripwire_id, evidence_hash) without re-judgment (where=conductor).
+    "suppressed_refire",
 })
 
 USAGE_FIELDS = ("input_tokens", "output_tokens", "cost_usd", "model", "session_id")

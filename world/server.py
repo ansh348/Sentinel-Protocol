@@ -108,6 +108,7 @@ class TripwireMatcher:
         self._touch_seen: set[tuple[str, str]] = set()
         self._call_history: list[tuple[str, str]] = []
         self._pattern_mode: dict[str, Optional[str]] = {}
+        self.last_suppressed: list[Tripwire] = []
 
     def arm(self, tripwire_set: TripwireSet) -> None:
         self.tripwires = list(tripwire_set.tripwires)
@@ -130,9 +131,14 @@ class TripwireMatcher:
 
     def evaluate(self, *, method: str, path: str, status: int,
                  body: Any) -> list[Tripwire]:
-        matched = [tw for tw in self.tripwires
-                   if tw.id not in self.suppressed
-                   and self._matches(tw, method, path, status, body)]
+        matched, suppressed = [], []
+        for tw in self.tripwires:
+            if not self._matches(tw, method, path, status, body):
+                continue
+            (suppressed if tw.id in self.suppressed else matched).append(tw)
+        # what the NOISE policy ate this call (D7); read by the middleware
+        # right after evaluate() — single-threaded server, no races
+        self.last_suppressed = suppressed
         self._call_history.append((method.upper(), path))
         return matched
 
@@ -346,8 +352,15 @@ class WorldMiddleware:
 
         # Pure predicate matching against the outgoing response.
         control: Optional[dict] = None
-        for tw in ctx.matcher.evaluate(method=method, path=path, status=status,
-                                       body=body):
+        matched = ctx.matcher.evaluate(method=method, path=path, status=status,
+                                       body=body)
+        for tw in getattr(ctx.matcher, "last_suppressed", []):
+            ctx.trace.emit(
+                actor="world", event_type="suppressed_refire",
+                payload={"where": "matcher", "counter": n, "tripwire_id": tw.id,
+                         "path": path, "status": status,
+                         "worker_id": worker_id})
+        for tw in matched:
             log_only = tw.action.on_trigger == "LOG"
             ctx.trace.emit(
                 actor="world",

@@ -15,6 +15,7 @@ merges them by ts for analysis.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -176,7 +177,9 @@ class Conductor:
         self.subplan_of: dict[str, str] = {}
         self.replans_done = 0
         self.escalations_seen = 0
-        self.noise_tripwires: set[str] = set()
+        # D7: NOISE adjudications are scoped by (tripwire_id, evidence_hash);
+        # the same tripwire with materially different evidence is judged fresh
+        self.noise_evidence: set[tuple[str, str]] = set()
         self.redo_used = False
         self.wave = 0
         self.all_calls: list[SessionResult] = []
@@ -394,10 +397,18 @@ class Conductor:
                                  "subplan_id": outcome.subplan_id})
 
         tripwire = self.armed_tripwires.get(tripwire_id, {"id": tripwire_id})
-        # A tripwire already adjudicated NOISE is not judged again: re-judging
-        # the same adjudicated noise burns judge calls and (via stale 409
-        # controls) can loop forever.
-        already_noise = tripwire_id in self.noise_tripwires
+        # D7: a (tripwire_id, evidence_hash) pair is never re-judged; the same
+        # tripwire firing with materially different evidence gets a fresh
+        # judgment. Every deduped escalation is a suppressed_refire.
+        ev_hash = self._evidence_hash(tripwire, evidence)
+        already_noise = (tripwire_id, ev_hash) in self.noise_evidence
+        if already_noise:
+            self.trace.emit(actor="conductor", event_type="suppressed_refire",
+                            payload={"where": "conductor",
+                                     "tripwire_id": tripwire_id,
+                                     "evidence_hash": ev_hash,
+                                     "worker_id": outcome.instance_id,
+                                     "subplan_id": outcome.subplan_id})
         verdict = None
         if self.system.judge_enabled and not already_noise:
             verdict, judge_results = judge_escalation(
@@ -411,7 +422,7 @@ class Conductor:
                 self.trace.emit(actor="conductor", event_type="error",
                                 payload={"where": "judge",
                                          "detail": "no valid verdict; treating as NOISE"})
-            self.noise_tripwires.add(tripwire_id)
+            self.noise_evidence.add((tripwire_id, ev_hash))
             if tripwire_id in self.armed_tripwires:
                 self._admin("POST", "/admin/suppress",
                             json={"tripwire_id": tripwire_id})
@@ -428,6 +439,7 @@ class Conductor:
             self.trace.emit(actor="conductor", event_type="redispatch",
                             payload={"after": "noise", "wave": self.wave,
                                      "already_noise": already_noise,
+                                     "evidence_hash": ev_hash,
                                      "steps": [step.model_dump()]})
             self.dispatch(executor, [step], pending)
             return
@@ -459,6 +471,20 @@ class Conductor:
                                  "revision": plan.revision,
                                  "steps": [s.model_dump() for s in plan.steps]})
         self.dispatch(executor, plan.steps, pending)
+
+    @staticmethod
+    def _evidence_hash(tripwire: dict, evidence: Any) -> str:
+        """Canonical hash over the VALUES of the tripwire's evidence_fields
+        (falls back to the whole escalated evidence object when the armed
+        tripwire is unknown)."""
+        fields = tripwire.get("evidence_fields")
+        if isinstance(evidence, dict) and fields:
+            subset = {f: evidence.get(f) for f in fields}
+        else:
+            subset = evidence
+        canonical = json.dumps(subset, sort_keys=True, separators=(",", ":"),
+                               default=str)
+        return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
     def _subtask_of(self, subplan_id: str) -> str:
         for step in self.plan.steps:

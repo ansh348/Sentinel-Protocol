@@ -100,8 +100,13 @@ def _conductor_reply(argv: list[str], stdin_text: str) -> str:
     system_prompt = argv[argv.index("--system-prompt") + 1] \
         if "--system-prompt" in argv else ""
     if "--allowedTools" in argv:                      # worker
-        if (os.environ.get("FAKE_WORKER_ESCALATE") == "1"
-                and 'X-Worker-Id: w2"' in system_prompt):
+        escalate_mode = os.environ.get("FAKE_WORKER_ESCALATE", "")
+        hit = (('X-Worker-Id: w2"' in system_prompt) if escalate_mode == "1"
+               # "always_w2": every redispatched w2 lineage member escalates
+               # with IDENTICAL evidence (exercises the D7 dedup)
+               else ("X-Worker-Id: w2" in system_prompt)
+               if escalate_mode == "always_w2" else False)
+        if hit:
             return json.dumps({
                 "status": "escalated",
                 "tripwire_id": "tw_pricing_endpoint_404",
@@ -110,7 +115,10 @@ def _conductor_reply(argv: list[str], stdin_text: str) -> str:
     if system_prompt.startswith("You are the Sentinel, the monitoring compiler"):
         return json.dumps(VALID_TRIPWIRE_SET)
     if system_prompt.startswith("You are the Sentinel acting as escalation judge"):
-        return json.dumps(VALID_VERDICT)
+        verdict = dict(VALID_VERDICT)
+        if os.environ.get("FAKE_JUDGE") == "NOISE":
+            verdict["verdict"] = "NOISE"
+        return json.dumps(verdict)
     # orchestrator
     try:
         message = json.loads(stdin_text)
