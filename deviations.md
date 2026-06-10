@@ -150,6 +150,12 @@ KG0 scoring decomposes per rubric property:
   and compiled tripwires only — no scores, no injection specs, no KG0
   thresholds. The author's hand audit remains authoritative; the external
   pass is a first-pass and disagreements are resolved by hand.
+  **Amended (2026-06-10):** a second cross-vendor rating (Gemini) was added;
+  authority now rests with **inter-rater agreement plus author adjudication
+  of disputed bits** (the hand-audit clause is retired). Process:
+  deterministic task-id normalization, 144-bit agreement, per-bit author
+  adjudication under a stated principle, consensus merge. Record committed
+  under `decisions/`.
 - **would-catch** (KG0 second clause) — empirical, not on-paper judgment: each
   planned (task, injection) pair is simulated against the armed compiled set
   in the real world server, and "caught" means a fresh tripwire fire after
@@ -368,6 +374,47 @@ is shaped before the judge tier, not amplified by retry loops.
 tokens inside `response_body`) interacts with D7 evidence-freshness to defeat
 identity-level dedup entirely; evidence-class cooldown is the consistent
 middle ground between re-judging everything and suppressing forever.
+
+---
+
+## D13 — Derived path samples (instrument repair, authorized post-KG0)
+
+**Date:** 2026-06-10 (author-authorized AFTER the KG0 verdict; the verdict's
+as-measured numbers are unchanged and remain the verdict basis).
+
+**Defect:** the D5 classification sample was hand-curated and omitted three
+real paths (`/docs/passages/ven-terms`, `/docs/passages/pol-pricing`,
+`/repo/files/README.md`), so three exact-path tripwires were misclassified
+dead — false negatives in the mechanized observable bit AND a latent
+live-matcher detection loss (those tripwires could never match in runs).
+
+**Repair:** `world.server.get_path_samples()` derives the sample mechanically
+from the world's own fixtures — routes from the OpenAPI spec, `{sku}`
+instantiated from the catalog, `{passage_id}` from the corpus index, `{path}`
+from the fixture repo tree. No hand-listing. The live-matcher fix applies
+prospectively, closing the detection loss before Phase 1.
+
+**Both-numbers rule:** the KG0 record reports 38/48 = 79% as-measured (the
+verdict basis, unchanged) and the instrument-corrected figure as a footnote;
+dialect classification and the empirical would-catch are re-run under the
+corrected samples with any delta reported the same way. See
+`decisions/kg0_verdict.md`.
+
+---
+
+## D14 — order_violation key vocabulary: known limitation (fifth gap)
+
+**Date:** 2026-06-10 (author ruling).
+
+The three remaining mechanized-observable zeros are honest zeros, but
+reclassified: the compiled `order_violation` predicates used invented keys
+(`must_precede`, `all_of`, prose constraints) because the expected
+`required_before`/`observed` vocabulary lived only in a frozen code comment —
+the **fifth schema-transmission instance** alongside D2 (fences), D5 (glob
+dialect), D8 (pointer dialect), and D9 (evidence-field spellings). Unlike the
+pointer dialects there is NO small verified set of spellings, so invented
+order keys are NOT normalized. Recorded as a known limitation; DSL v2 moves
+the vocabulary into the schema.
 
 ---
 

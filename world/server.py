@@ -21,6 +21,7 @@ uvicorn instance per run on a port from 8400-8407 and kills it afterwards.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 from dataclasses import dataclass
@@ -43,34 +44,47 @@ _MISSING = object()
 # True restores pre-D8 strict pointer semantics. Production runs never set it.
 STRICT_POINTERS = False
 
-# Canonical concrete paths covering every route family; used to classify
-# url_patterns at arm time (D5) and by the Phase 0 mechanized-observable bit.
-PATH_SAMPLES = (
-    "/auth/token", "/auth/validate",
-    "/inventory/items", "/inventory/items/WID-001", "/inventory/items/GAD-001",
-    "/pricing/quote/WID-001", "/pricing/quote/GAD-001", "/pricing/quotes",
-    "/shipping/destinations", "/shipping/rates/WID-001", "/shipping/rates/GAD-001",
-    "/docs/passages", "/docs/passages/pol-returns", "/docs/passages/ops-warehouses",
-    "/docs/search", "/docs/validate", "/docs/package",
-    "/repo/files", "/repo/files/config/settings.yaml", "/repo/files/src/aggregate.py",
-    "/repo/validate",
-)
+@functools.lru_cache(maxsize=1)
+def get_path_samples() -> tuple[str, ...]:
+    """D13: the canonical concrete-path sample is derived MECHANICALLY from
+    the world's own fixtures — routes from the OpenAPI spec, parameterized
+    segments instantiated from the fixture keys they range over ({sku} ->
+    catalog SKUs, {passage_id} -> corpus ids, {path} -> fixture repo files).
+    No hand-listing: the previous hand-curated tuple misclassified three
+    exact-path patterns as dead (false negatives in the mechanized observable
+    bit AND a latent live-matcher detection loss, fixed prospectively here)."""
+    from world.state import PASSAGES, REPO_FILES, SKUS
+    from world.surface import _openapi_paths
+    samples: set[str] = set()
+    for path in _openapi_paths():
+        if "{" not in path:
+            samples.add(path)
+            continue
+        if "{sku}" in path:
+            samples.update(path.replace("{sku}", sku) for sku in SKUS)
+        if "{passage_id}" in path:
+            samples.update(path.replace("{passage_id}", p["id"])
+                           for p in PASSAGES)
+        if "{path}" in path:
+            samples.update(path.replace("{path}", f) for f in REPO_FILES)
+    return tuple(sorted(samples))
 
 
 def classify_url_pattern(pattern: str) -> Optional[str]:
     """deviations.md D5: url_pattern is matched as a glob per the DSL comment,
     but the frozen compile prompt gives the model no way to know that, and
     compiled sets reliably emit regex-style patterns. Classification is static
-    and deterministic, decided once at arm time against PATH_SAMPLES: glob if
-    the pattern glob-matches any sample, else regex if it regex-matches any
-    sample, else None (a dead pattern that never matches anything)."""
-    if any(fnmatchcase(p, pattern) for p in PATH_SAMPLES):
+    and deterministic, decided once at arm time against the derived sample
+    (D13): glob if the pattern glob-matches any sample, else regex if it
+    regex-matches any sample, else None (a dead pattern that never matches)."""
+    samples = get_path_samples()
+    if any(fnmatchcase(p, pattern) for p in samples):
         return "glob"
     try:
         rx = re.compile(pattern)
     except re.error:
         return None
-    if any(rx.search(p) for p in PATH_SAMPLES):
+    if any(rx.search(p) for p in samples):
         return "regex"
     return None
 

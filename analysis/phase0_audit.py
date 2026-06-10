@@ -444,8 +444,8 @@ def kg0(outdir: Path, external_csv: Optional[Path]) -> int:
     print(f"rubric 4/4: {four_of_four}/{total} tripwires ({share:.0%}); "
           f"threshold >= {KG0_RUBRIC_THRESHOLD:.0%} "
           f"-> {'PASS' if share >= KG0_RUBRIC_THRESHOLD else 'FAIL'}")
-    print("NOTE: external first-pass per D4; the hand audit remains "
-          "authoritative before any kill decision.")
+    print("NOTE: authority rests with inter-rater agreement plus author "
+          "adjudication (amended D4).")
     both = (share >= KG0_RUBRIC_THRESHOLD
             and catch_rate >= KG0_WOULDCATCH_THRESHOLD)
     print(f"KG0 (both clauses): {'PASS' if both else 'FAIL'}")

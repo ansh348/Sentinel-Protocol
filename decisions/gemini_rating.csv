@@ -1,0 +1,49 @@
+task_id,tripwire_id,parameterized,actionable,calibrated,notes
+price-availability-report,tw_auth_post_status,1,1,1,CRITICAL and global scope align with blocking auth dependency
+price-availability-report,tw_auth_token_field,1,1,1,CRITICAL and global scope correct for token extraction failure
+price-availability-report,tw_worker_auth_rejected,1,1,1,CRITICAL and global scope correct for rejected token
+price-availability-report,tw_inventory_list_status,1,1,1,CRITICAL and local s2 scope correct
+price-availability-report,tw_inventory_sku_count,1,1,1,WARNING is defensible as incomplete results may not waste the whole step's work
+price-availability-report,tw_inventory_item_schema,1,1,0,WARNING under-calibrates schema failure for strictly required field
+price-availability-report,tw_pricing_status,1,1,1,CRITICAL and local s3 scope correct
+price-availability-report,tw_pricing_unit_price_absent,1,1,0,WARNING under-calibrates schema failure for strictly required field
+price-availability-report,tw_pricing_currency_usd,1,1,1,WARNING is defensible since conversion step can be inserted without full failure
+price-availability-report,tw_shipping_status,1,1,1,CRITICAL and local s4 scope correct
+price-availability-report,tw_shipping_schema,1,1,0,WARNING under-calibrates schema failure for strictly required field
+price-availability-report,tw_tool_order_auth_first,1,1,1,CRITICAL and global scope correct for core ordering violation
+pricing_key_migration,tw_s1_settings_has_old_key,1,1,1,CRITICAL and local s1 scope correct
+pricing_key_migration,tw_s1_settings_put_ok,1,1,1,CRITICAL and local s1 scope correct
+pricing_key_migration,tw_s1_value_preserved,1,1,1,CRITICAL and local s1 scope correct
+pricing_key_migration,tw_s2_file_list_ok,1,1,1,CRITICAL and local s2 scope correct
+pricing_key_migration,tw_s2_src_annotation_present,1,1,1,WARNING correctly scaled since absence of annotation skips work rather than wasting it
+pricing_key_migration,tw_s2_src_put_ok,1,1,1,CRITICAL and local s2 scope correct
+pricing_key_migration,tw_s3_readme_exists,1,1,1,WARNING correctly scaled since missing README means safe skip
+pricing_key_migration,tw_order_s1_s2_before_validate,1,1,1,CRITICAL and global scope correct
+pricing_key_migration,tw_s3_validate_200,1,1,1,CRITICAL and local s3 scope correct
+pricing_key_migration,tw_s3_validate_schema,1,1,1,CRITICAL and local s3 scope correct
+pricing_key_migration,tw_s4_validate_passed,1,1,1,CRITICAL and local s4 scope correct
+pricing_key_migration,tw_s4_checks_run_nonzero,1,1,0,WARNING under-calibrates gate validation short-circuiting
+policy-brief-ops,tw_auth_token_http,1,1,1,CRITICAL and global scope correct
+policy-brief-ops,tw_auth_token_field,1,1,1,CRITICAL and global scope correct
+policy-brief-ops,tw_docs_bearer_rejected,1,1,1,CRITICAL and global scope correct
+policy-brief-ops,tw_passage_pol_returns,1,1,1,CRITICAL and local s1 scope correct
+policy-brief-ops,tw_passage_ops_warehouses,1,1,1,CRITICAL and local s2 scope correct
+policy-brief-ops,tw_passage_ven_terms,1,1,1,CRITICAL and local s3 scope correct
+policy-brief-ops,tw_passage_content_field,1,1,0,WARNING under-calibrates missing required content field which blocks all extraction
+policy-brief-ops,tw_validate_http_error,1,1,1,CRITICAL and local s4 scope correct
+policy-brief-ops,tw_validate_not_passed,1,1,1,CRITICAL and local s4 scope correct
+policy-brief-ops,tw_validate_passed_field,1,1,0,WARNING under-calibrates missing field necessary for critical branching
+policy-brief-ops,tw_package_conflict,1,1,1,CRITICAL and local s4 scope correct
+policy-brief-ops,tw_package_id_field,1,1,0,WARNING under-calibrates missing field required for the final plan output
+product-catalog-pipeline-2026-06-10,tw_auth_token,1,1,1,CRITICAL and global scope correct
+product-catalog-pipeline-2026-06-10,tw_auth_token_field,1,1,1,CRITICAL and global scope correct
+product-catalog-pipeline-2026-06-10,tw_inventory_items_http,1,1,1,CRITICAL and local s1 scope correct
+product-catalog-pipeline-2026-06-10,tw_sku_schema,1,1,0,WARNING under-calibrates schema failure for strictly required field
+product-catalog-pipeline-2026-06-10,tw_passage_ops_http,1,1,1,CRITICAL and local s2 scope correct
+product-catalog-pipeline-2026-06-10,tw_passage_pricing_http,1,1,1,CRITICAL and local s2 scope correct
+product-catalog-pipeline-2026-06-10,tw_validate_schema,1,1,1,CRITICAL and local s3 scope correct
+product-catalog-pipeline-2026-06-10,tw_validate_checks_zero,1,1,0,WARNING under-calibrates validation gate short-circuiting
+product-catalog-pipeline-2026-06-10,tw_validate_not_passed,1,1,1,CRITICAL and local s4 scope correct
+product-catalog-pipeline-2026-06-10,tw_package_order,1,1,1,CRITICAL and local s4 scope correct
+product-catalog-pipeline-2026-06-10,tw_package_conflict,1,1,1,CRITICAL and local s4 scope correct
+product-catalog-pipeline-2026-06-10,tw_package_id_absent,1,1,1,CRITICAL and local s4 scope correct
