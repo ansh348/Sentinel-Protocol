@@ -1,0 +1,8 @@
+# Frozen pre-registered materials and the prereg snapshot: byte-faithful storage
+# and checkout (no line-ending normalization), so the sha256 hashes pinned in
+# commit history hold on every clone.
+sentinel/dsl.py -text
+prompts/sentinel_compile.md -text
+prompts/sentinel_judge.md -text
+prompts/worker.md -text
+prereg.md -text
