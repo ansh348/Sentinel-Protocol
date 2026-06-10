@@ -462,3 +462,104 @@ the same observable: RFC6901 (`/a/b`), dotted (`a.b`), and JSONPath-prefixed
 wildcards, slices) are interpreted — those remain unresolvable. Finding for
 the paper alongside D2/D5; DSL v2 carries the dialect in schema-visible
 Field descriptions.
+
+---
+
+## D16 — Success checkers for b1/c1/d1 (night-0 build gap + test gap)
+
+**Date:** 2026-06-10 (author ruling on night-0 candidate deviation CD-1).
+
+**Evidence:** night 0 enqueued 13 jobs; the 9 b1/c1/d1 jobs all completed
+their agent runs and crashed at the checker step with
+`FileNotFoundError: tasks/checkers/{b1,c1,d1}.py` — only `a1.py` existed
+(the b/c/d yamls said "checker lands with the archetype runs" and never
+did). The 76-test suite was green because nothing asserted an existing
+checker per task yaml: a build gap and a test gap.
+
+**Mechanism (blind construction rule):** the three checkers derive every
+constant from their task yamls at the frozen commit and clone `a1.py`'s
+structure (`check(final_report, ground_truth) -> (bool, detail)`); `b1.py`
+derives its pre-migration baseline (preserved key value, originally
+annotated files) at import time from the world's authored fixtures
+(`world.state.REPO_FILES`). Nothing in checker logic originates from
+night-0 traces, which were not read during construction. The files are
+presented to the author as a derivation diff against their yamls BEFORE any
+evaluation runs; after author review, retroactive evaluation over night-0's
+preserved final aggregates is ADMISSIBLE (checkers are deterministic
+functions of outputs already on disk) and completes the manipulation table
+at $0. Night-0 outputs become test fixtures only AFTER their verdicts are
+recorded. `tests/test_checkers.py` closes the test gap: every task yaml
+must declare an existing, loadable checker that passes ground-truth-derived
+smoke fixtures and rejects empty/non-dict reports.
+
+**Limitations (recorded a priori):** c1's premise probes are substring
+heuristics derived from yaml assumption a1 ("30-day returns, three
+operational warehouses, weekly restocking") — they catch
+premise-contradicting briefs at a paraphrase false-negative risk; c1/d1
+check `package_id` as a non-empty string only (no world-side registry
+cross-check).
+
+---
+
+## D17 — n_inject from n=3 clean medians; failed-checker clean runs stand
+
+**Date:** 2026-06-10 (author rulings 3 and 5 on the night-0 report).
+
+**Rulings:** per-task n_inject is NOT fixed from night-0's n=1 clean
+samples. The 8 remaining S1 clean cells (a1/b1/c1/d1 x seeds 2,3 — matrix
+cells regardless) run first; per-task n_inject is then fixed from the n=3
+medians under the frozen 50%-of-median rule (protocol 5.2). CD-2 ruling:
+the a1 seed-1 clean run STANDS as a matrix cell with its failed-checker
+outcome ("final report is not a JSON object") — batch flakes are data, not
+do-overs — and its 18-call trajectory is a valid median input; a terminal
+formatting flake does not alter trajectory length. The same rule applies to
+any clean run whose checker fails.
+
+**Cell accounting (explicit):** night-0's 4 clean runs bank as S1/seed-1
+matrix cells. Night-0's 9 injected runs are calibration-only (fired at
+provisional n_inject=8, not final per-task values): no injected cell banks
+from night 0, favorable or not. Once n_inject is fixed and the D18/D19
+redesigns land, all 9 manipulation checks re-run (S1, seed 1) under final
+parameters; the table must be all-QUALIFIED before any other matrix cell
+runs, and those spec-identical re-runs bank as the S1/seed-1 injected
+cells.
+
+---
+
+## D18 — schema_drift(pricing) redesign: non-self-describing rename
+
+**Date:** 2026-06-10 (author ruling 4; manipulation verdicts under the
+frozen rule, letter intact — the qualification rule is NOT amended).
+
+**Evidence:** night-0 manipulation check a1+schema_drift NOT QUALIFIED —
+checker passed with no redo (24 tool calls vs clean 18). The drifted
+payload (`price_cents` plus unchanged-currency context) self-described the
+remap, so the batch absorbed the rename without replanning: a drift the
+batch shrugs off was never a manipulation.
+
+**Mechanism:** the pricing arm now serves
+`{"sku", "price": <integer cents>, "currency": "USD"}` — the rename target
+(`price`) no longer self-describes the silent dollars-to-cents unit change,
+so a naive remap corrupts every consumed unit_price by 100x and the checker
+catches it. The repo_config arm is unchanged (its drift already breaks the
+validate gate's reference check). Re-qualification happens in the D17
+manipulation re-runs.
+
+---
+
+## D19 — token_expiry redesign: hard expiry (issuance suspended)
+
+**Date:** 2026-06-10 (author ruling 4).
+
+**Evidence:** night-0 manipulation check a1+token_expiry NOT QUALIFIED as
+frozen — workers self-recovered by re-calling POST /auth/token after the
+401s, burning 44 tool calls vs clean 18 (2.4x) with a passing checker and
+no redo. RECORDED NIGHT-0 FINDING (author): silent-recovery waste is real
+and thesis-relevant; candidate exploratory arm outside the primary table.
+
+**Mechanism:** token_expiry now revokes all active tokens AND sets
+`auth_locked`: POST /auth/token thereafter returns 401
+(`token_issuance_suspended`), so the refresh path fails too and recovery
+requires an orchestrator-level replan, never a silent worker retry. The
+redesign is type-level and therefore also applies to c1+token_expiry.
+Re-qualification happens in the D17 manipulation re-runs.
