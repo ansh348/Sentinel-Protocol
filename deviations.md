@@ -743,3 +743,31 @@ computation was discarded as void (see D17 fraction-rule note).
    scan): a runner summary whose run directory shows zero tool calls AND
    no success_check event is never accepted as done — the job is marked
    failed (error void_run) with run_dir and cost persisted per CD-3.
+
+
+## D22 — CANDIDATE (report-only, archaeology v2): trace request-body decode is lossy for invalid UTF-8
+
+**Date:** 2026-06-12 (found during the Phase 0 byte-identity replay of the
+archaeology-v2 battery; reported per the standing instrument-vs-system
+boundary — NO repair performed; the author rules on disposition).
+
+**Evidence:** `WorldMiddleware._respond` records `tool_call.body` as
+`_parse_json(raw)`, which falls back to `raw.decode("utf-8",
+errors="replace")` when the bytes are not valid JSON/UTF-8. The original
+request bytes are therefore unrecoverable from the trace whenever a worker
+emits invalid UTF-8. One instance exists in the banked matrix:
+d1-S5-endpoint_404-s1 counter 31 (POST /docs/validate) — the live router
+rejected the malformed bytes with 400 ("error parsing the body") while the
+re-encoded trace string parses cleanly (replay returns 200). Detail:
+runs/archaeology_v2/replay_check.json (LOSSY-REQ exclusion class);
+analysis/replay_check.py header documents the class.
+
+**Scope:** request-side only. The matcher consumes RESPONSE tuples
+(method, path, status, body), which replay byte-identically 27/27 across
+all injected S5 cells, so no matcher verdict, metric, or gate quantity is
+affected. Impact is limited to byte-exact replay/audit of malformed
+worker requests (artifact-evaluation fidelity).
+
+**Proposed remediation (for the author; NOT applied):** record a base64
+`body_raw` alongside the parsed body when `_parse_json` falls back to
+lossy decoding.
