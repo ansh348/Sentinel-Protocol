@@ -11,3 +11,5 @@ Columns: UTC timestamp | component | purpose | inputs | LLM cost (USD) | notes
 
 | ts (UTC) | component | purpose | inputs | LLM cost | notes |
 |---|---|---|---|---|---|
+| 2026-06-11T22:42Z | world re-instantiation (analysis/replay_check.py) | Phase 0 (iii) byte-identity confirmation | 27 injected S5 cells: world_config.json + recorded tool_call streams; traces redirected to tempdir | $0 | first pass: 26/27; one divergence at d1-S5-endpoint_404-s1 counter 31 |
+| 2026-06-11T22:48Z | world re-instantiation (analysis/replay_check.py) | re-run after classifying the LOSSY-REQ exclusion (invalid-UTF8 request bytes unrecoverable from trace) | same 27 cells | $0 | 27/27 byte-identical; exclusions counted: control-stripped, tripped-409, lossy-req=1; detail runs/archaeology_v2/replay_check.json |
