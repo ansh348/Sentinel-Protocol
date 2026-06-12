@@ -2,9 +2,9 @@
 # Compile-sufficient spec (Phase 0); checker lands with the D-archetype runs.
 id: d1
 archetype: document_pipeline
-# Phase 1b runs on the rev-2 world (held-out-category surface; see
+# Phase 1b runs on the rev-3 world (held-out-category surface; see
 # benchmark/holdouts/). Banked Phase 1 configs default to rev 1.
-world_rev: 2
+world_rev: 3
 goal: >
   Generate, validate, and package a product-catalog document through the
   required gate. The document must have a title, a body of at least 200

@@ -101,3 +101,67 @@ decidability and recovery-by-construction:
   draw script (analysis/holdout_escrow_draw.py) is committed and ready;
   it refuses to run twice.
 - Data embargo and dev-run ledger stand; no v2 component exists or ran.
+
+---
+
+# APPENDIX — DV spec rev 2 re-qualification (same day; author ruling adopted)
+
+The author ruling (2026-06-12) adopted the proposed revision: world_rev 3
+— `page_size -> limit` rename at v2.0 (pre-armored `page_size` calls
+silently truncate), totals in an `X-Total-Count` header only, three
+decidability surfaces, mid-run fire window, post-size-below-collection
+constraint encoded in the escrow script. Implementation: suite 113/113;
+banked Phase 1 replay byte-identity 27/27 under rev-3 code
+(runs/archaeology_v2/replay_check_rev3_regression.json). Re-qualification:
+3 clean + 3 injected S1 on b1, rev-3 world, qseed-904/905/906, N=2
+(recorded rationale: latest counter at which the wound stays live across
+dispatch orders while call 1 still executes against v1.x). Driver:
+analysis/holdout_requalification_dv.py; detail
+runs/holdout_requalification_dv/summary.json; $1.99.
+
+## Verdict: RE-QUALIFICATION FAILED — on both gates
+
+| arm | seed | result | attribution | trace pointer |
+|---|---|---|---|---|
+| clean | 904 | **FAIL** | w1 turn-capped (exit 1 @ 15 turns); single-worker plan | runs/b1-S1-clean-s904 |
+| clean | 905 | PASS | two-worker plan; w3r1 completed validate | runs/b1-S1-clean-s905 |
+| clean | 906 | **FAIL** | w1 + w2r1 both turn-capped (exit 1 @ 15 turns) | runs/b1-S1-clean-s906 |
+| injected | 904 | FAIL — **not wound-attributed** | enumeration at counter 1 (pre-bump); tax.py GET@7/PUT@13; failure = null-output/turn-cap fragility | runs/b1-S1-silent_minor_bump-s904 |
+| injected | 905 | PASS | enumeration at counter 1 (pre-bump, full list); wound never live | runs/b1-S1-silent_minor_bump-s905 |
+| injected | 906 | PASS | enumeration at counter 1 (`limit=200` pre-bump — ignored, full list at default 100); wound never live | runs/b1-S1-silent_minor_bump-s906 |
+
+Clean: **1/3 PASS → the pre-committed fixture-weight STOP branch fired**
+(clean fails >= 2/3). Wound-attributed injected failures: **0/3** (the
+single non-wound failure explicitly not counted, per the ruling).
+Injection fired at exactly N=2 via the counter path in 3/3 (instrument
+clean); the rename mechanics are unit-verified
+(tests/test_holdout_injections.py rev-3 block) — the mutation works; its
+wound was unreachable.
+
+## Root cause — one mechanism behind both gate failures
+
+**The orchestrator consolidates b1 into a single worker in 5 of 6 plans**
+(seeds 901–906; the task yaml seeds three worker steps and fan_out 4;
+Sonnet plans `[('s1','w1')]` anyway):
+
+1. *Fixture weight:* one worker x 8-file repo = 15–20 curls against the
+   14-turn worker cap — clean b1 became a cap-boundary coin flip (today:
+   3/6 across both revs; every clean failure is an exit-1-at-15-turns
+   worker, never a checker-evidenced wrong migration).
+2. *Wound reachability:* a single worker lists the repo as its FIRST
+   call. At any N >= 2 the enumeration pre-dates the bump — H2's
+   single-visit mechanism, now binding at N=2. The mid-run fire window
+   and single-worker consolidation are jointly unsatisfiable on b1 as
+   fixtured.
+
+## STOP
+
+Per the ruling: no third revision without a fresh author ruling. No
+escrow draw (the superset spans both categories). Options that the next
+ruling could weigh, listed without recommendation: slim the fixture pack
+(e.g. 6 files / 2 pricing-annotated keeps a page-2 hidden site at
+post<=4 while cutting ~4 calls); raise the b1 worker turn cap
+(harness-comparability cost); harden the b1 prompt's fan-out mandate
+(task-identity cost); retarget DV's primary host or fire rule (e.g.
+N keyed to the redo wave). RESOURCE_BUDGET's qualified verdict is
+unaffected. Session totals: $5.20 of the $25 cap.

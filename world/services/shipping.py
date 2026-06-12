@@ -14,11 +14,12 @@ router = APIRouter(prefix="/shipping", tags=["shipping"])
 
 @router.get("/destinations")
 def list_destinations(request: Request, page: Optional[int] = None,
-                      page_size: Optional[int] = None) -> dict:
+                      page_size: Optional[int] = None,
+                      limit: Optional[int] = None) -> dict:
     require_token(request)
     state: WorldState = request.app.state.ctx.state
     return paginated(state, "/shipping/destinations", "destinations",
-                     list(DESTINATIONS), page, page_size)
+                     list(DESTINATIONS), page, page_size, limit)
 
 
 @router.get("/rates/{sku}")

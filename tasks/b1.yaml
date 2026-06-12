@@ -2,10 +2,10 @@
 # Compile-sufficient spec (Phase 0); checker lands with the B-archetype runs.
 id: b1
 archetype: repo_migration
-# Phase 1b runs on the rev-2 world: the fixture repo carries the 8-file
+# Phase 1b runs on the rev-3 world: the fixture repo carries the 8-file
 # DV-enabling pack (REPO_FILES_V2; see benchmark/holdouts/DEPENDENCY_VERSION.md
 # Section 5). Banked Phase 1 configs default to rev 1 (4 files).
-world_rev: 2
+world_rev: 3
 goal: >
   Migrate the fixture repository's pricing configuration key: rename
   pricing.source_field to pricing.price_source in config/settings.yaml

@@ -110,8 +110,10 @@ qualification revises this spec, never the bar.
 
 ## 8. Harness integration notes (1b launch; not this session)
 
-- The world hosts the mutation at `world_rev: 2` (RunConfig field, default 1
-  preserves byte-identical replay of banked Phase 1 configs).
+- The world hosts the mutation at `world_rev >= 2` (RunConfig field,
+  default 1 preserves byte-identical replay of banked Phase 1 configs;
+  rev 3 — the DV spec-rev-2 world — is current for 1b and leaves this
+  category's mechanics untouched).
 - The 1b launcher consumes `escrow/holdout_escrow.json` programmatically
   (per-cell seed, N, Q0); the author never opens the file.
 - D6 surface derivation and D13 pattern-liveness samples must become

@@ -36,6 +36,7 @@ from sentinel.dsl import Tripwire, TripwireSet
 from trace import TraceWriter
 from world.injections import (DEPRECATION_BODY, QUOTA_EXHAUSTED_BODY,
                               apply_injection)
+from world.pagination import TOTAL_COUNT_KEY
 from world.state import InjectionSpec, RunConfig, WorldState
 from world.services import auth, docs, inventory, meta, pricing, repo, shipping
 
@@ -441,12 +442,17 @@ class WorldMiddleware:
         ctx = self.ctx
         state = ctx.state
 
-        # Held-out-category surface (rev 2; benchmark/holdouts/*.md), applied
-        # BEFORE matching and tracing so the matcher and the trace both see
-        # exactly what the worker sees.
+        # Held-out-category surface (rev >= 2; benchmark/holdouts/*.md),
+        # applied BEFORE matching and tracing so the matcher and the trace
+        # both see exactly what the worker sees.
         extra_headers: dict[str, str] = {}
         if state.config.world_rev >= 2:
             extra_headers["X-API-Version"] = state.service_version(path)
+        # DV spec rev 2 (rev 3 worlds): list totals live in the X-Total-Count
+        # header, never in the body — the route ships the count under a
+        # reserved key that is popped here (race-free: it rides the response).
+        if isinstance(body, dict) and TOTAL_COUNT_KEY in body:
+            extra_headers["X-Total-Count"] = str(body.pop(TOTAL_COUNT_KEY))
         if state.quota_metered(path):
             if status < 400:  # billable call: 4xx/5xx (incl. the 429s) never bill
                 state.quota_remaining = max(0, state.quota_remaining - 1)

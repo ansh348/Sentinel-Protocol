@@ -2,9 +2,9 @@
 # Compile-sufficient spec (Phase 0); checker lands with the C-archetype runs.
 id: c1
 archetype: research_synthesis
-# Phase 1b runs on the rev-2 world (held-out-category surface; see
+# Phase 1b runs on the rev-3 world (held-out-category surface; see
 # benchmark/holdouts/). Banked Phase 1 configs default to rev 1.
-world_rev: 2
+world_rev: 3
 goal: >
   Produce a policy brief for the operations team answering three questions
   from the document store: (1) what are the customer returns terms, (2) which

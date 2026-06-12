@@ -12,16 +12,21 @@ Custody (decisions/holdout_escrow_record.md): the file is transmitted to the
 non-implementer escrow holder; the 1b harness consumes it programmatically at
 launch; the author does not open it.
 
-Draw rules (verbatim from the specs):
+Draw rules (verbatim from the specs; DV per spec rev 2, author ruling
+2026-06-12):
 - run seed: unique per cell, uniform 1000-9999 (distinct namespace from
-  Phase 1 matrix seeds {1,2,3} and qualification seeds {901,902,903})
+  Phase 1 matrix seeds {1,2,3} and qualification seeds {901..906})
 - RESOURCE_BUDGET (quota_cliff): N uniform in [40%, 60%] of the task's clean
-  median (a1 24, c1 12, d1 21 — Phase 1 finals; b1 from the rev-2
-  qualification clean median), floored bounds; Q0 uniform [8, 14]
-- DEPENDENCY_VERSION (silent_minor_bump): N uniform {1, 2, 3}; post version
-  from {2.0.0, 2.0.1}; post page size uniform [3, 6] for b1 (8-file repo),
-  [3, 5] for a1/c1/d1 (6-item collections); pre page size fixed 100, pre
-  version fixed 1.4.0
+  median (a1 24, c1 12, d1 21 — Phase 1 finals; b1 from the rev-3
+  re-qualification clean median), floored bounds; Q0 uniform [8, 14]
+- DEPENDENCY_VERSION (silent_minor_bump): N uniform {2, 3} (mid-run, never
+  1, inside the pre-enumeration live window — spec rev 2 Section 2); post
+  version from {2.0.0, 2.0.1}; post page size uniform [3, 6] for b1
+  (8-file repo), [3, 5] for a1/c1/d1 (6-item collections) — the
+  author-ratified constraint that every drawn post size sits STRICTLY
+  BELOW the host collection size is asserted here in code, not only in
+  the spec; pre page size fixed 100, pre version fixed 1.4.0, parameter
+  rename page_size -> limit fixed
 - service family: FIXED per task by the specs, recorded per cell
 """
 from __future__ import annotations
@@ -35,7 +40,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = REPO_ROOT / "escrow" / "holdout_escrow.json"
-QUAL_SUMMARY = REPO_ROOT / "runs" / "holdout_qualification" / "summary.json"
+QUAL_SUMMARY = (REPO_ROOT / "runs" / "holdout_requalification_dv"
+                / "summary.json")
 
 TASKS = ("a1", "b1", "c1", "d1")
 SEEDS_PER_CELL = 5
@@ -47,22 +53,32 @@ FAMILY = {
     "d1": ["/docs", "/inventory"],
 }
 PHASE1_CLEAN_MEDIANS = {"a1": 24, "c1": 12, "d1": 21}
+# Host collection size on the task's wound surface (a1/d1: inventory items;
+# b1: repo files at rev >= 2; c1: passages).
+HOST_COLLECTION_SIZE = {"a1": 6, "b1": 8, "c1": 6, "d1": 6}
 DV_POST_PAGE_RANGE = {"a1": (3, 5), "b1": (3, 6), "c1": (3, 5), "d1": (3, 5)}
 DV_POST_VERSIONS = ("2.0.0", "2.0.1")
-DV_N_CHOICES = (1, 2, 3)
+DV_N_CHOICES = (2, 3)
 RB_Q0_RANGE = (8, 14)
+
+# Author-ratified constraint (ruling 2026-06-12, item 5): drawn post sizes
+# must sit strictly below the host collection size.
+for _task, (_lo, _hi) in DV_POST_PAGE_RANGE.items():
+    assert _hi < HOST_COLLECTION_SIZE[_task], (
+        f"{_task}: post-size range {(_lo, _hi)} must stay strictly below "
+        f"the host collection size {HOST_COLLECTION_SIZE[_task]}")
 
 
 def _uniform(lo: int, hi: int) -> int:
     return lo + secrets.randbelow(hi - lo + 1)
 
 
-def b1_rev2_clean_median() -> int:
+def b1_rev3_clean_median() -> int:
     rows = json.loads(QUAL_SUMMARY.read_text(encoding="utf-8"))
     counts = sorted(r["tool_calls"] for r in rows
                     if r["task"] == "b1" and r["injection"] is None)
     if len(counts) != 3:
-        raise SystemExit("REFUSING: need exactly 3 clean b1 qualification "
+        raise SystemExit("REFUSING: need exactly 3 clean b1 re-qualification "
                          f"runs in {QUAL_SUMMARY}, found {len(counts)}")
     return int(statistics.median(counts))
 
@@ -73,7 +89,7 @@ def main() -> int:
                          "happens exactly once. Delete it only with the "
                          "escrow holder's involvement.")
     medians = dict(PHASE1_CLEAN_MEDIANS)
-    medians["b1"] = b1_rev2_clean_median()
+    medians["b1"] = b1_rev3_clean_median()
 
     used_seeds: set[int] = set()
 

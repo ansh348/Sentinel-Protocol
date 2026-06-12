@@ -29,10 +29,11 @@ class FileContent(BaseModel):
 
 @router.get("/files")
 def list_files(request: Request, page: Optional[int] = None,
-               page_size: Optional[int] = None) -> dict:
+               page_size: Optional[int] = None,
+               limit: Optional[int] = None) -> dict:
     state: WorldState = request.app.state.ctx.state
     return paginated(state, "/repo/files", "files", sorted(state.repo_files),
-                     page, page_size)
+                     page, page_size, limit)
 
 
 @router.get("/files/{path:path}")

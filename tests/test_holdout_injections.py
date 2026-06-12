@@ -246,3 +246,119 @@ def test_silent_minor_bump_counter_path(make_world):
     state = world.client.get("/admin/state").json()
     assert state["injection_fired_at"] == 2
     assert state["bumped_page_size"] == 4
+
+
+# ----------------------------------------- rev 3 (DV spec rev 2: the rename)
+
+def test_rev3_pre_bump_surface(make_world):
+    """Rev 3 pre-bump: bodies carry no totals or hints; X-Total-Count header
+    on every list/search response; page_size honored, limit ignored;
+    manifest documents page_size_param."""
+    world = make_world(world_rev=3)
+    h = auth_headers(get_token(world.client))
+
+    files = world.client.get("/repo/files")
+    body = files.json()
+    assert body == {"files": sorted(REPO_FILES_V2)}
+    for forbidden in ("total_count", "_total_count", "has_more", "next_page"):
+        assert forbidden not in body
+    assert files.headers["x-total-count"] == "8"
+    assert files.headers["x-api-version"] == "1.4.0"
+
+    items = world.client.get("/inventory/items", headers=h)
+    assert items.headers["x-total-count"] == "6"
+    assert "total_count" not in items.json()
+    search = world.client.get("/docs/search", params={"q": "warehouse"},
+                              headers=h)
+    assert "x-total-count" in search.headers
+    assert "total_count" not in search.json()
+
+    # v1.x: page_size honored, limit unknown -> ignored
+    assert len(world.client.get("/repo/files",
+                                params={"page_size": 3}).json()["files"]) == 3
+    assert len(world.client.get("/repo/files",
+                                params={"limit": 3}).json()["files"]) == 8
+
+    manifest = world.client.get("/manifest").json()
+    assert manifest["services"]["repo"] == {
+        "version": "1.4.0", "default_page_size": 100,
+        "page_size_param": "page_size"}
+
+
+def test_rev3_bump_renames_parameter(make_world):
+    world = make_world(world_rev=3)
+    inject(world.client, "silent_minor_bump", family=["/repo"],
+           version_to="2.0.0", page_size_to=5)
+
+    # the pre-armored call: page_size=100 silently ignored, truncated at the
+    # v2.0 default, status 200, body carries no tell
+    armored = world.client.get("/repo/files", params={"page_size": 100})
+    assert armored.status_code == 200
+    assert armored.json() == {"files": sorted(REPO_FILES_V2)[:5]}
+    assert "src/tax.py" not in armored.json()["files"]
+    # ground truth stays readable in the header (decidability surface b)
+    assert armored.headers["x-total-count"] == "8"
+    assert armored.headers["x-api-version"] == "2.0.0"
+
+    # default call truncates identically
+    assert world.client.get("/repo/files").json()["files"] == \
+        sorted(REPO_FILES_V2)[:5]
+
+    # recovery route (a): manifest documents the rename; limit honored
+    manifest = world.client.get("/manifest").json()
+    assert manifest["services"]["repo"] == {
+        "version": "2.0.0", "default_page_size": 5,
+        "page_size_param": "limit"}
+    assert world.client.get("/repo/files",
+                            params={"limit": 100}).json()["files"] == \
+        sorted(REPO_FILES_V2)
+
+    # recovery route (b): page stays functional
+    page2 = world.client.get("/repo/files", params={"page": 2}).json()
+    assert page2["files"] == sorted(REPO_FILES_V2)[5:]
+
+    # non-family services keep v1.x semantics
+    manifest_docs = manifest["services"]["docs"]
+    assert manifest_docs == {"version": "1.4.0", "default_page_size": 100,
+                             "page_size_param": "page_size"}
+
+
+def test_rev3_wounds_pre_armored_b1_migration(make_world):
+    """The rev-1-spec defeat replayed against spec rev 2: a migration that
+    pre-armors page_size=100 still misses the hidden annotation site."""
+    world = make_world(world_rev=3)
+    inject(world.client, "silent_minor_bump", family=["/repo"],
+           version_to="2.0.0", page_size_to=5)
+
+    settings = world.client.get("/repo/files/config/settings.yaml").json()["content"]
+    world.client.put("/repo/files/config/settings.yaml", json={
+        "content": settings.replace("source_field: unit_price",
+                                    "price_source: unit_price")})
+    visible = world.client.get("/repo/files",
+                               params={"page_size": 100}).json()["files"]
+    assert len(visible) == 5  # the armor is inert
+    for path in visible:
+        if not path.endswith(".py"):
+            continue
+        content = world.client.get(f"/repo/files/{path}").json()["content"]
+        if "pricing.source_field" in content:
+            world.client.put(f"/repo/files/{path}", json={
+                "content": content.replace("pricing.source_field",
+                                           "pricing.price_source")})
+    verdict = world.client.post("/repo/validate").json()
+    assert verdict["status"] == "failed"
+    failed = {c["name"] for c in verdict["checks"] if not c["passed"]}
+    assert failed == {"references_resolve"}
+
+
+def test_rev3_quota_cliff_unchanged(make_world):
+    """RB mechanics are untouched by the rev-3 changes."""
+    world = make_world(world_rev=3)
+    h = auth_headers(get_token(world.client))
+    inject(world.client, "quota_cliff", family=["/inventory"], q0=1)
+    r1 = world.client.get("/inventory/items", headers=h)
+    assert r1.status_code == 200 and r1.json()["quota_remaining"] == 0
+    assert r1.headers["x-total-count"] == "6"
+    dead = world.client.get("/inventory/items", headers=h)
+    assert dead.status_code == 429
+    assert dead.json() == {**QUOTA_EXHAUSTED_BODY, "quota_remaining": 0}

@@ -14,11 +14,12 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 @router.get("/items")
 def list_items(request: Request, page: Optional[int] = None,
-               page_size: Optional[int] = None) -> dict:
+               page_size: Optional[int] = None,
+               limit: Optional[int] = None) -> dict:
     require_token(request)
     state: WorldState = request.app.state.ctx.state
     return paginated(state, "/inventory/items", "items",
-                     list(state.inventory), page, page_size)
+                     list(state.inventory), page, page_size, limit)
 
 
 @router.get("/items/{sku}")
