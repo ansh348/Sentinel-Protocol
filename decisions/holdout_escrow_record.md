@@ -48,8 +48,13 @@ at 14:45 local (author-attested), as a single file
 (holdout_escrow.json, ~9 kB) accompanied by the custody SHA-256 in the
 same thread, enabling the holder to verify her copy against this public
 record independently.
-Receipt confirmation: [PENDING — to be appended on the holder's
-acknowledgment].
+Receipt confirmation: CONFIRMED at 14:49 local, 2026-06-12 — holder's
+acknowledgment in the same WhatsApp thread, minutes after delivery
+(author-provided screenshot reviewed in-session: custody SHA-256
+message 14:43, file delivery 14:45, acknowledgment 14:49; the author's
+transmission message restated the custody terms verbatim — hold, return
+only on written request, hash publicly committed so neither side can
+swap the file later).
 Local-copy integrity at transmission: SHA-256 recomputed and matched
 (df1dcd8bd1cad04f815576cc1d6876807e95bbf25ffc959ada40ff0fa2bb3c88;
 git check-ignore coverage re-verified in the same step).
@@ -57,6 +62,11 @@ Standing custody rules restated: the local copy is consumed
 programmatically by the harness at Phase 1b launch; the author does not
 open it; the holder produces her copy only on the author's written
 request; the draw script's run-once guard remains in force.
+Custody note: the operator log recorded the escrow file appearing in
+the author's IDE during transmission handling (twice, same day); the
+author attests the file was handled for transmission only and its
+contents were not read. The drawn values remain unseen by the author;
+blindness stands on this attestation, recorded here for completeness.
 
 **Memo §5 condition (b) is hereby CLOSED**: both held-out categories
 qualified (decisions/holdout_qualification_2026-06-12.md, Appendix 2),
