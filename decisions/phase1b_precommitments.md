@@ -223,3 +223,48 @@ D with this one-line note.
 
 *Committed before any A–G analysis output existed; see the dev-run ledger
 (analysis/dev_run_ledger.md) for the complete execution record.*
+
+---
+
+## RATIFIED VALUES (2026-06-12)
+
+Ratified by the author via decisions/decision_memo_phase1.md §4 (signature
+clause: the memo's commit constitutes ratification, within the 48-hour
+window). Values attach to the P2 structures above; where wording differs,
+the committed rationale text above governs. Per P1, shared quantities
+inherit v1's pre-verdict thresholds verbatim and derive from nothing the
+archaeology-v2 battery reported.
+
+- **1bKG1 (detection):** strict recall ≥60% on recoverable-class cells;
+  ≥50% in ≥4/5 categories (reported with Wilson lower bounds; any category
+  with n<3 is descriptive only); kill floor <40%. Probe validity is a HARD
+  gate: a seeded 20% audit of probe-generated interrupts must show 100%
+  targeted/fresh/non-perturbing/independent; any failure excludes that
+  interrupt class from recall before the gate computes. Recovery quality:
+  detect-only, detect-and-recover, detect-and-justified-abort counted
+  separately; ≥50% of strict detections must be the latter two. Held-out
+  categories (memo §5: RESOURCE_BUDGET, DEPENDENCY_VERSION, seeds escrowed
+  with a non-implementer) are inside the recall denominator.
+- **1bKG2 (noise/self-harm), absolute caps:** clean-cell median FIR = 0;
+  P95 ≤ 1; max false interrupts per clean cell ≤ 3; zero escalation-cap
+  grinds on clean cells (hard). Pre-detection false-interrupt budget on
+  injected cells: median ≤ 2 before first true detection. Clean success:
+  absolute floor ≥ 60% AND ≥ (S1 clean − 10 points). (Ratified: 60/10,
+  A.M.)
+- **1bKG3 (economics):** clean overhead ≤ 12% (inherited), probe costs
+  included in waste. Primary view unamortized per-run; amortized view
+  reported descriptively over a pre-specified 10-task repeated-plan
+  workload. No crossover-plausibility gate (resolved against v1; the full
+  study carries the claim).
+- **1bKG4 (vs heartbeat):** TTD ≥ 2× (inherited) AND wasted-work
+  parity-or-better vs cost-matched S3 with probe costs included.
+  Sensitivity row: undetected cells censored at run end.
+- **Standing:** instrumentation-integrity replay (Task-A pattern) runs on
+  100% of injected 1b cells BEFORE gates compute; S2 is a mandatory
+  head-to-head arm with an honesty clause (if S2 dominates v2 on recall at
+  ≤ FIR, the paper says so in the results, not a footnote).
+- **Corroboration policy:** the second-signal clause (E.1 (i)) is DELETED
+  per memo §3 (6/18 false interrupts self-corroborated, two on a clean
+  cell); the PROBE-PRIMARY variant — pre-committed above as the alternate —
+  is the ratified policy. Status fast path retained as operationalized
+  (status ≥ 400).
