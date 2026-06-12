@@ -42,10 +42,25 @@ SHA-256 above; **the author does not open it**; the holder produces her
 copy only on the author's written request; the loader never prints or logs
 drawn values.
 
-**Transmission: PENDING (author action).** The author transmits the file
-to the holder with the custody SHA-256 in the same thread before matrix
-launch, and the transmission record (delivery + receipt confirmation) is
-appended here — the holdout record's pattern.
+## Transmission record (2026-06-13)
+
+The escrow file was transmitted by the author to the escrow holder via
+WhatsApp on 2026-06-13 at 01:33 local (author-attested "done" with
+screenshot reviewed in-session), as a single file (matrix_escrow.json,
+~4 kB), followed at 01:34 by the custody SHA-256 in the same thread
+(matches this record:
+2a9aed0a386df2f0fe5fa2122b2d85114f699eea8d6b2085df786cbeb6204e0e),
+enabling the holder to verify her copy against this public record
+independently. Identity note, recorded for completeness (the holdout
+record's custody-note pattern): the WhatsApp chat carries the contact
+alias "Von Neumann"; the holder of record per the custody rule is Zeynep
+Sağlık, and the alias-to-holder identity stands on the author's
+attestation. **Receipt acknowledgment from the holder: not yet visible at
+screenshot time — to be appended on receipt (the holdout record's
+delivery-plus-confirmation pattern).** Standing custody rules unchanged:
+hold; return only on the author's written request; hash publicly
+committed so neither side can swap the file; the author does not open the
+local copy, which the harness consumes programmatically at launch.
 
 **Blindness statement:** the drawn values were never printed, logged, or
 displayed during the draw (console output: shape, non-secret basis,
