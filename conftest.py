@@ -24,7 +24,8 @@ def make_world(tmp_path):
     counter = {"n": 0}
 
     def _make(seed: int = 1, n_inject: int | None = None,
-              injection: dict | None = None, world_rev: int = 1) -> World:
+              injection: dict | None = None, world_rev: int = 1,
+              probe_channel: bool = False) -> World:
         counter["n"] += 1
         run_id = f"test-{counter['n']:03d}"
         trace_path = str(tmp_path / f"{run_id}.jsonl")
@@ -37,6 +38,7 @@ def make_world(tmp_path):
             injection=InjectionSpec(**injection) if injection else None,
             trace_path=trace_path,
             world_rev=world_rev,
+            probe_channel=probe_channel,
         )
         return World(client=TestClient(create_app(config)), config=config,
                      trace_path=trace_path)

@@ -45,6 +45,12 @@ class RunConfig(BaseModel):
     # endpoints, and the expanded fixture repo (REPO_FILES_V2). Banked Phase 1
     # configs lack the field and default to 1.
     world_rev: int = 1
+    # v2 probe side channel (v6.1 §11.9 amendment #1; archaeology_v2 G7).
+    # False (the default for every banked and pre-1b config) renders the
+    # probe marker header inert: requests carrying it count and behave
+    # exactly like ordinary worker traffic, so Phase 1 behavior is
+    # byte-identical. Enabled explicitly by the 1b launch manifest only.
+    probe_channel: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +330,10 @@ class WorldState:
         self.counter: int = 0
         self.injection_fired: bool = False
         self.injection_fired_at: Optional[int] = None
+        # v2 probe side channel: its own metering sequence, never the
+        # injection clock (G7 vector 1). Instrumentation bookkeeping only —
+        # invisible to workers and to every Phase 1 code path.
+        self.probe_seq: int = 0
 
         # mutation flags written by world.injections
         self.removed_routes: list[str] = []

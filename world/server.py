@@ -355,6 +355,22 @@ class WorldMiddleware:
         state = ctx.state
         config = ctx.config
 
+        # v2 probe side channel (v6.1 §11.9 amendment #1; archaeology_v2 G7):
+        # probe traffic observes without perturbing — it must not advance the
+        # injection-clock counter (vector 1), not enter the token stream
+        # (vector 2), not touch the validated_docs sentinel (vector 3), and
+        # mutate no world state at all; it never meets the matcher, controls,
+        # or tripped-worker enforcement. Flag-gated: banked and pre-1b
+        # configs default probe_channel=False, making the marker header
+        # inert (the request counts as ordinary worker traffic), so Phase 1
+        # behavior is byte-identical.
+        if config.probe_channel:
+            probe_headers = {k.decode("latin-1").lower(): v.decode("latin-1")
+                             for k, v in scope.get("headers", [])}
+            if "x-probe-channel" in probe_headers:
+                await self._respond_probe(scope, receive, send)
+                return
+
         state.counter += 1
         n = state.counter
         method = scope["method"]
@@ -441,6 +457,88 @@ class WorldMiddleware:
             await send(message)
 
         await self.app(scope, receive_teed, send_buffered)
+
+    async def _respond_probe(self, scope: Scope, receive: Receive,
+                             send: Send) -> None:
+        """The perturbation-isolated probe path. READ-ONLY by construction:
+        only GET/HEAD are dispatched (a state-mutating handler can therefore
+        never execute on this channel — vectors 2 and 3 are closed at the
+        transport, not by handler discipline); boundary checks and response
+        transforms are pure reads; the only bookkeeping is the separate
+        probe-metering sequence (probe_seq), which no worker-visible or
+        Phase 1 code path consumes."""
+        ctx = self.ctx
+        state = ctx.state
+        method = scope["method"]
+        path = scope["path"]
+        query = scope.get("query_string", b"").decode("utf-8", errors="replace")
+
+        state.probe_seq += 1
+        k = state.probe_seq
+        ctx.trace.emit(actor="probe", event_type="probe_call",
+                       payload={"probe_seq": k, "method": method, "path": path,
+                                "query": query})
+
+        async def finish(status: int, body: Any,
+                         extra_headers: Optional[dict[str, str]] = None) -> None:
+            ctx.trace.emit(actor="probe", event_type="probe_response",
+                           payload={"probe_seq": k, "status": status,
+                                    "body": body})
+            if isinstance(body, str):
+                response = Response(content=body, status_code=status,
+                                    media_type="text/plain",
+                                    headers=extra_headers or None)
+            else:
+                response = Response(
+                    content=json.dumps(body, separators=(",", ":"),
+                                       ensure_ascii=False),
+                    status_code=status, media_type="application/json",
+                    headers=extra_headers or None)
+            await response(scope, receive, send)
+
+        if method not in ("GET", "HEAD"):
+            await finish(405, {"error": "probe_channel_read_only",
+                               "detail": "the probe side channel dispatches "
+                                         "GET/HEAD only; state-mutating "
+                                         "methods are refused at the "
+                                         "transport boundary"})
+            return
+
+        # Boundary views the worker path also serves, replicated as pure
+        # reads so probes observe the same broken world workers would.
+        if state.route_removed(path):
+            await finish(404, dict(DEPRECATION_BODY))
+            return
+        if state.quota_metered(path) and state.quota_remaining == 0:
+            await finish(429, dict(QUOTA_EXHAUSTED_BODY))
+            return
+
+        start_message: dict = {}
+        body_chunks: list[bytes] = []
+        done = {"sent": False}
+
+        async def send_buffered(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                start_message.update(message)
+                return
+            if message["type"] == "http.response.body":
+                body_chunks.append(message.get("body", b""))
+                if not message.get("more_body", False) and not done["sent"]:
+                    done["sent"] = True
+                    body = _parse_json(b"".join(body_chunks))
+                    extra: dict[str, str] = {}
+                    if state.config.world_rev >= 2:
+                        extra["X-API-Version"] = state.service_version(path)
+                    if isinstance(body, dict) and TOTAL_COUNT_KEY in body:
+                        extra["X-Total-Count"] = str(body.pop(TOTAL_COUNT_KEY))
+                    if state.quota_metered(path):
+                        # read-only view: NO decrement on the probe path
+                        extra["X-Quota-Remaining"] = str(state.quota_remaining)
+                    await finish(start_message["status"], body, extra)
+                return
+            await send(message)
+
+        await self.app(scope, receive, send_buffered)
 
     async def _respond(self, scope: Scope, receive: Receive, send: Send, n: int,
                        method: str, path: str, query: str, worker_id: str, *,

@@ -60,6 +60,12 @@ EVENT_TYPES = frozenset({
     # failed strict schema validation (each rejection precedes its re-prompt
     # turn, so per-system dialect-error rates and costs are measurable).
     "reply_rejected",
+    # v2 probe side channel (v6.1 §11.9 amendment #1; prereg_1b): probe
+    # traffic is separately metered and rides its own event pair — it never
+    # advances the tool-call counter, so tool_call/tool_response would lie.
+    # Emitted only on probe_channel-enabled (1b) runs; banked traces have none.
+    "probe_call",
+    "probe_response",
 })
 
 USAGE_FIELDS = ("input_tokens", "output_tokens", "cost_usd", "model", "session_id")
