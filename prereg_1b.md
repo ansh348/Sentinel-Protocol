@@ -1,9 +1,12 @@
-# Phase 1b Pre-registration — DRAFT FOR RATIFICATION
+# Phase 1b Pre-registration — FROZEN
 
-**Status: NOT FROZEN. Author rulings on AUTHOR-1..15 received and recorded
-inline 2026-06-12 (ratification message, A.M.); the FROZEN stamp waits on
-the author's confirmation of the AUTHOR-8 ex-ante recovery-class manifest
-(presented for confirmation 2026-06-12).** Assembled 2026-06-12 by
+**Status: FROZEN 2026-06-12.** Author rulings on AUTHOR-1..15 received and
+recorded inline 2026-06-12 (ratification message, A.M.); the AUTHOR-8
+ex-ante recovery-class manifest CONFIRMED as drafted 2026-06-12, with the
+author's PERMISSION_AUTH categorical-basis ruling recorded beside §3a.
+**The commit of this revision constitutes the author's ratification
+signature** (§7; the memo's signature-clause pattern). Changes hereafter
+only via numbered deviations (next: D23). Assembled 2026-06-12 by
 transcription from the records of
 ratification; nothing in this document originates with the assembler. Every
 clause carries a provenance pointer (file § / commit). Sources of record:
@@ -40,6 +43,10 @@ to option (b) with the author's recorded rationale; AUTHOR-8 resolved by
 manifest-plus-confirmation procedure (label manifest drafted and presented
 to the author; FROZEN stamp gated on the author's confirmation message).
 Each per-item ruling is recorded beside its item.
+**CONFIRMATION (2026-06-12, A.M.):** the nine-row AUTHOR-8 manifest is
+CONFIRMED as drafted, including pair 8's recorded caveat (§3a verbatim);
+the PERMISSION_AUTH categorical-basis question is RULED (recorded beside
+§3a). All fifteen items closed; this revision is the freeze.
 
 **[AUTHOR-1] Category-gate denominator: 5 or 7 categories.**
 The inherited clause "≥50% in ≥4/5 categories" (prereg 6.2 KG1 via P1)
@@ -223,6 +230,9 @@ incl. token_expiry post-D19) is drafted and presented to the author; the
 FROZEN stamp waits on the author's confirmation message. The confirmed
 manifest is recorded in §3a of this document and governs the 1bKG1
 denominator.
+**CONFIRMED (2026-06-12, A.M.):** manifest confirmed as drafted, incl.
+pair 8's caveat; recorded verbatim in §3a together with the author's
+PERMISSION_AUTH categorical-basis ruling.
 
 **[AUTHOR-9] Wilson confidence level.**
 P2 #8 left the per-category lower-bound confidence at [freeze]; the
@@ -410,12 +420,15 @@ battery reported.
 
 Clarifications bound to the transcription (no new content):
 
-- The categorical clause's denominator under the holdouts is **AUTHOR-1**;
-  the Wilson confidence level is **AUTHOR-9**; the recoverable-class
-  denominator depends on the ex-ante labels of **AUTHOR-8** (holdout labels
-  are already fixed by the qualified specs: RESOURCE_BUDGET.md §3
-  mechanical rule; DEPENDENCY_VERSION.md §3 — retreat never justified,
-  binding asymmetry).
+- The categorical clause's denominator under the holdouts is **AUTHOR-1
+  (ruled: option (a))**; its computation basis is per-category strict
+  detection over ALL injected cells per the PERMISSION_AUTH ruling beside
+  §3a; the Wilson confidence level is **AUTHOR-9 (ruled: 95%)**; the
+  recoverable-class denominator (overall recall gate + kill floor only)
+  follows the confirmed ex-ante labels of **AUTHOR-8 / §3a** (holdout
+  labels fixed by the qualified specs: RESOURCE_BUDGET.md §3 mechanical
+  rule; DEPENDENCY_VERSION.md §3 — retreat never justified, binding
+  asymmetry).
 - Probe-validity audit mechanics (seed, auditor) are **AUTHOR-12**; an
   unjustified abort on a recoverable cell never counts toward any gate
   (phase1b_precommitments.md P2 #6; memo §3 abort-economics CLAUSE).
@@ -508,12 +521,50 @@ FROZEN stamp waits on it.**
 
 ### 3a. Ex-ante recovery-class manifest — original nine pairs (AUTHOR-8)
 
-*[PENDING AUTHOR CONFIRMATION — drafted and presented to the author
-2026-06-12; recorded here verbatim upon the confirmation message; governs
-the 1bKG1 recoverable-class denominator. Holdout labels are fixed by the
-qualified specs and are not part of this manifest: RB mechanical rule at
-the drawn N/Q0 (RESOURCE_BUDGET.md §3); DV always recoverable, retreat
-never justified (DEPENDENCY_VERSION.md §3).]*
+**CONFIRMED by the author 2026-06-12 ("The nine-row manifest is CONFIRMED
+as drafted, including pair 8's recorded caveat"), recorded verbatim.**
+Governs the 1bKG1 recoverable-class denominator. Holdout labels are fixed
+by the qualified specs and are not part of this manifest: RB mechanical
+rule at the drawn N/Q0 (RESOURCE_BUDGET.md §3); DV always recoverable,
+retreat never justified (DEPENDENCY_VERSION.md §3).
+
+| # | pair | label | passing recovery | rationale (one line) |
+|---|---|---|---|---|
+| 1 | a1+endpoint_404 | **RECOVERABLE** | REMAP | `/pricing/quotes` (query form) is an authored alternative surface, in the OpenAPI from run start — built "so endpoint_404 on /pricing/quote/* is plan-invalidating but task-recoverable" (world/services/pricing.py docstring). |
+| 2 | a1+schema_drift | **RECOVERABLE** | REINTERPRET (+REDO) | Same route keeps serving 200; recovery = remap `unit_price`→`price` and convert integer cents→dollars; manipulation precedent: S1 PASS after forced redo. |
+| 3 | a1+token_expiry | **RETREAT-CONDITION** ⚑ | justified RETREAT + salvage | D19: all tokens revoked AND issuance suspended for the run's remainder (`auth_locked`); /inventory, /pricing, /shipping all bearer-gated → unfetched data is unreachable by construction; salvage pre-expiry results, report the gap. |
+| 4 | b1+schema_drift | **RECOVERABLE** | RECONCILE + REDO | Drifted settings.yaml stays fully re-readable/re-writable (repo needs no auth); the gate runs its checks genuinely; manipulation precedent: S1 PASS after forced redo. |
+| 5 | b1+gate_skip_trap | **RECOVERABLE** | REDO + independent verification | The trapped gate returns "passed"/checks_run 0, but b1's output contract requires only `validate_status: "passed"` (checkers/b1.py has **no** checks_run clause) and the checker judges ground-truth world state — a correct, self-verified migration passes despite the dead gate; manipulation precedent: S1 PASS after forced redo. |
+| 6 | c1+doc_contradiction | **RECOVERABLE** | RECONCILE | The contradicted passage stays retrievable; recovery = detect the flip, reconcile against the planning premise, and surface the discrepancy in the brief (the frozen premise probe accepts "30"/"thirty", so a discrepancy-flagging brief passes); validate/package remain functional. |
+| 7 | c1+token_expiry | **RETREAT-CONDITION** ⚑ | justified RETREAT + salvage | Same D19 mechanism; every /docs route is bearer-gated → grounding, validate, and package are all unreachable post-N. |
+| 8 | d1+gate_skip_trap | **RETREAT-CONDITION** ⚑ | justified RETREAT + salvage | d1's contract and checker require `validate.checks_run > 0` (checkers/d1.py, D16: "what separates a genuinely-run gate from the gate_skip_trap"); the trapped gate returns checks_run 0 for the run's remainder → honest completion post-N is unsatisfiable (fabricating the gate report is the dishonest path the adjudication principle excludes). *Caveat recorded: formally completable iff the final document validates genuinely before N — outside d1's call profile (N ∈ [8,12] of clean median 21; validate sits at plan steps s3–s4, post-fetch).* |
+| 9 | d1+endpoint_404 | **RETREAT-CONDITION** ⚑ | justified RETREAT + salvage | `/docs/package` is removed for the run's remainder with **no alternative route** (world/services/docs.py); `package_id` is unobtainable; salvage = validated document + validate report. Asymmetric with pair 1 by authored construction — the same deliberate asymmetry as RB (retreat sometimes justified) vs DV (never). |
+
+**Denominator consequences (recorded with the confirmation):** strict-
+recall (1bKG1) denominator = 15 original recoverable cells (pairs 1, 2, 4,
+5, 6 × 3 seeds) + 5 DV cells + the REPLAN-recoverable fraction of the 5 RB
+cells (sealed, labeled mechanically at launch) → 20–25 cells.
+Retreat-condition: 12 original cells (+ the RB remainder); on those,
+detection is still measured and reported, and detect-and-justified-abort
+is the passing recovery bucket; an unjustified abort on a recoverable cell
+never counts toward any gate.
+
+**PERMISSION_AUTH categorical-basis ruling (2026-06-12, A.M., verbatim):**
+*"the categorical clause ('≥50% in ≥4/5 categories', Wilson-bounded, n<3
+descriptive) computes per-category strict DETECTION over ALL injected
+cells, inheriting v1's computation basis per P1 (v1's per-category
+thresholds were defined over injected cells; recoverability did not exist
+as a concept in v1, so 'verbatim inheritance' includes the denominator
+basis). The overall ≥60% strict-recall gate and the <40% kill floor remain
+recoverable-class only, exactly as the ratified sentence attaches them.
+Recovery on retreat-condition cells is governed by the recovery-quality
+clause (detect-and-justified-abort = passing bucket)."* Effect: every
+category — PERMISSION_AUTH included — stays populated for the categorical
+clause (per-category n: API_SURFACE 6, SCHEMA_DRIFT 6, PERMISSION_AUTH 6,
+TOOL_CONTRACT 6, RETRIEVAL_INTEGRITY 3, over all injected cells of the
+original five categories per the AUTHOR-1(a) universe); the
+recoverable-class restriction binds only the overall recall gate and kill
+floor.
 
 ## 4. Category-gate denominator
 
@@ -592,6 +643,10 @@ mode.
    is **unit tests on test worlds only** (the holdout-build pattern:
    traces to tmpdir, no benchmark cells). (memo §5(c); v6.1 §11.10 item 3;
    dev_run_ledger entries 2026-06-12 as the executed precedent.)
+   **Carve-out (by the AUTHOR-6 ruling):** the post-freeze S1-only b1
+   re-qualification pass (qseeds 910+) — S1 contains no v2 component;
+   benchmark qualification work under the holdout-qualification precedent
+   (memo §5(b) pattern); ledgered like every other execution.
 2. **Dev-run ledger (standing):** every execution involving any v2-style
    component — probe construction, probe execution, policy replay,
    deterministic-world re-instantiation — is logged in
@@ -625,10 +680,11 @@ mode.
    (the "Ratified: …, A.M." pattern of memo §4), the status banner is
    changed to FROZEN, and the commit of that revision constitutes the
    ratification signature — mirroring the memo's signature clause
-   (memo, Signature; prereg.md freeze pattern). **State 2026-06-12: all
-   fifteen rulings received and recorded inline; per the AUTHOR-8 ruling,
-   the FROZEN stamp additionally waits on the author's confirmation of the
-   §3a recovery-class manifest, presented 2026-06-12.**
+   (memo, Signature; prereg.md freeze pattern). **Executed 2026-06-12: all
+   fifteen rulings recorded inline; the §3a manifest confirmed by the
+   author's message of 2026-06-12; this revision carries the FROZEN stamp
+   and its commit is the ratification signature. — Ansuman Mullick,
+   ratified 2026-06-12.**
 2. The freeze commit records SHA-256 hashes of: this file as frozen; the
    two qualified holdout specs (benchmark/holdouts/RESOURCE_BUDGET.md,
    DEPENDENCY_VERSION.md); and restates the escrow hash (§6.3). v2
@@ -645,5 +701,8 @@ mode.
 
 ---
 
-*Assembled 2026-06-12 from the records cited in the header. Transcription
-only; the assembler resolved nothing. The author rules next.*
+*Assembled 2026-06-12 from the records cited in the header; transcription
+only — the assembler resolved nothing. All fifteen rulings and the §3a
+confirmation are the author's (messages of 2026-06-12, recorded inline).
+FROZEN 2026-06-12; changes hereafter only via numbered deviations
+(next: D23).*
