@@ -840,3 +840,47 @@ mechanism — the frozen blob is not edited; this record governs.
      stands if it binds.
 6. The v2 build remains authorized and unblocked (memo §5 conditions;
    prereg_1b §5.1); the b1-pair question exits the critical path.
+
+---
+
+## D24 — Compile-time pattern-liveness sweep + rev-aware D13 samples
+## (#7-class instrument fix)
+
+**Date:** 2026-06-13 (v2 build window; ordered by decision memo §5(d)-(e)
+and v6.1 §11.9 amendment #7; prereg_1b §3 build requirement). **Affects:**
+new v2 compile-time gate (sentinel_v2/pattern_liveness.py) + an optional
+`samples` parameter on world.server.classify_url_pattern (default
+preserves Phase 1 behavior byte-identically).
+
+**Evidence (the class, not the singleton):** archaeology_v2 §A.3/G2 — 84
+armed url_patterns that could never match any world path under the live
+D5 dialect (61 host-qualified; 19 on tripwires covering their own cell's
+injection on paper, across 8 cells); the a1+token_expiry/s1 detection
+miss is the one place the class changed an outcome. Compile-side dialect
+family emitted host-qualified patterns at scale; nothing failed loudly.
+
+**Mechanism:** (1) `assert_patterns_live(tripwire_set, world_rev)` — every
+compiled url_pattern is classified with the EXACT D5 arm-time classifier
+against the rev's canonical D13 samples; any dead pattern fails
+compilation loudly with the complete dead list (DeadPatternError; class
+fix — one failure names every defect; no silent drops). (2) D13 samples
+become rev-aware (`path_samples_for_rev`): rev 1 returns the Phase 1
+derived sample VERBATIM; rev >= 2 derives identically from the rev-N
+world's own OpenAPI + fixture collections (mechanical, no hand-listing) —
+without this, 1b tripwires targeting rev-2+ surfaces would be classified
+dead, the exact #7 wound (prereg_1b §3).
+
+**Regression evidence:** tests/test_pattern_liveness.py — (a) the banked
+corpus replay: all 84 archaeology-v2 armed-dead patterns are caught
+(84/84 dead; 61 host-qualified; 19 covering / 8 cells re-verified from
+the banked sweep); (b) the a1+token_expiry host-qualified mechanism
+reproduced and rejected; (c) rev-1 samples byte-identical to Phase 1's
+(`path_samples_for_rev(1) == get_path_samples()`); (d) /manifest dead at
+rev 1, live at rev 4 — the rev gate works both directions. Banked-world
+byte-identity 27/27 re-verified at the night-shift close (session
+regression record).
+
+**Boundary:** instrument-class per memo §5(e). The Phase 1 arm-time
+classifier, matcher, and all banked replays are untouched (default
+parameter path is byte-identical); the sweep gates only v2 compilation,
+which does not exist yet — no measured quantity changes anywhere.

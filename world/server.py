@@ -72,14 +72,20 @@ def get_path_samples() -> tuple[str, ...]:
     return tuple(sorted(samples))
 
 
-def classify_url_pattern(pattern: str) -> Optional[str]:
+def classify_url_pattern(pattern: str,
+                         samples: Optional[tuple[str, ...]] = None) -> Optional[str]:
     """deviations.md D5: url_pattern is matched as a glob per the DSL comment,
     but the frozen compile prompt gives the model no way to know that, and
     compiled sets reliably emit regex-style patterns. Classification is static
     and deterministic, decided once at arm time against the derived sample
     (D13): glob if the pattern glob-matches any sample, else regex if it
-    regex-matches any sample, else None (a dead pattern that never matches)."""
-    samples = get_path_samples()
+    regex-matches any sample, else None (a dead pattern that never matches).
+
+    `samples` defaults to the rev-1 derived sample (byte-identical Phase 1
+    behavior for every existing caller); the v2 pattern-liveness sweep (D24,
+    #7-class fix) passes rev-aware samples explicitly."""
+    if samples is None:
+        samples = get_path_samples()
     if any(fnmatchcase(p, pattern) for p in samples):
         return "glob"
     try:
