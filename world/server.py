@@ -481,10 +481,17 @@ class WorldMiddleware:
 
         async def finish(status: int, body: Any,
                          extra_headers: Optional[dict[str, str]] = None) -> None:
+            # HEAD over the side channel = the GET's status and headers with
+            # the body suppressed (FastAPI routes do not serve HEAD natively;
+            # the probe transport provides the HEAD-equivalent read E.2 names).
             ctx.trace.emit(actor="probe", event_type="probe_response",
                            payload={"probe_seq": k, "status": status,
-                                    "body": body})
-            if isinstance(body, str):
+                                    "body": None if method == "HEAD" else body})
+            if method == "HEAD":
+                response = Response(content=b"", status_code=status,
+                                    media_type="application/json",
+                                    headers=extra_headers or None)
+            elif isinstance(body, str):
                 response = Response(content=body, status_code=status,
                                     media_type="text/plain",
                                     headers=extra_headers or None)
@@ -538,7 +545,11 @@ class WorldMiddleware:
                 return
             await send(message)
 
-        await self.app(scope, receive, send_buffered)
+        # HEAD dispatches as GET (routes serve GET only); finish() suppresses
+        # the body, so the handler executes the identical pure read.
+        dispatch_scope = (dict(scope, method="GET") if method == "HEAD"
+                          else scope)
+        await self.app(dispatch_scope, receive, send_buffered)
 
     async def _respond(self, scope: Scope, receive: Receive, send: Send, n: int,
                        method: str, path: str, query: str, worker_id: str, *,
