@@ -1,7 +1,10 @@
 # Phase 1b Pre-registration — DRAFT FOR RATIFICATION
 
-**Status: NOT FROZEN. Freeze pending author ratification of the numbered
-block below.** Assembled 2026-06-12 by transcription from the records of
+**Status: NOT FROZEN. Author rulings on AUTHOR-1..15 received and recorded
+inline 2026-06-12 (ratification message, A.M.); the FROZEN stamp waits on
+the author's confirmation of the AUTHOR-8 ex-ante recovery-class manifest
+(presented for confirmation 2026-06-12).** Assembled 2026-06-12 by
+transcription from the records of
 ratification; nothing in this document originates with the assembler. Every
 clause carries a provenance pointer (file § / commit). Sources of record:
 decisions/decision_memo_phase1.md §4–§7 (e808862, signed within the 48-hour
@@ -30,6 +33,14 @@ rationale, and provenance. **The freeze commit may occur only after the
 author rules on each item; rulings are recorded inline here (pattern:
 "Ratified: …, A.M.", per memo §4) before the FROZEN stamp.**
 
+**RULINGS RECORD (2026-06-12, ratification message, A.M.):** defaults
+ACCEPTED on AUTHOR-1(a), 2, 3, 5, 6, 9, 10(i)+(ii), 11, 12, 13, 14, 15 —
+with amendments on 4, 5, and 12 recorded inline below; AUTHOR-7 OVERRIDDEN
+to option (b) with the author's recorded rationale; AUTHOR-8 resolved by
+manifest-plus-confirmation procedure (label manifest drafted and presented
+to the author; FROZEN stamp gated on the author's confirmation message).
+Each per-item ruling is recorded beside its item.
+
 **[AUTHOR-1] Category-gate denominator: 5 or 7 categories.**
 The inherited clause "≥50% in ≥4/5 categories" (prereg 6.2 KG1 via P1)
 predates the held-out categories; the ratified 1bKG1 text quotes it
@@ -51,6 +62,9 @@ shape is partially known (qualification hosts, n per category); and G13
 at the holdouts' n. Option (a) is the only reading that adds zero new
 threshold content. Provenance: phase1b_precommitments.md P1 + RATIFIED
 VALUES 1bKG1; decision_memo_phase1.md §4; archaeology_v2.md G13.
+**Ruling (2026-06-12, A.M.): option (a) RATIFIED** — categorical hard
+clause over the original five; holdouts inside overall recall, Wilson-
+bounded reporting, descriptive where n<3.
 
 **[AUTHOR-2] Matrix shape: seeds per cell, clean-cell coverage, cell count.**
 v6.1 §11.10 fixes arms, categories, and anti-overfit structure but not the
@@ -63,6 +77,8 @@ only committed precedent for every structural choice is the Phase 1 matrix;
 nothing in the ratified record licenses a different seed count.
 Provenance: v6.1 §11.6 (13 variants × 5 systems × 3 seeds); prereg.md;
 pilot_protocol.md §5.
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED** — 3 seeds, clean cells for
+every arm, 49 cells per arm, 245 cells total.
 
 **[AUTHOR-3] Holdout consumption from the 40-cell escrow superset.**
 The superset (4 tasks × 5 seeds × 2 categories) deliberately exceeds what
@@ -78,6 +94,8 @@ Wilson/small-n clause without touching unqualified combinations (e.g. c1's
 recorded-weak DV wound). Provenance: holdout_escrow_record.md (superset
 shape + consumption clause); holdout_qualification_2026-06-12.md (verdicts
 attach to a1/b1); RATIFIED VALUES 1bKG1 (Wilson, n<3 descriptive).
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED** — RB-a1 and DV-b1 only,
+all 5 escrowed seeds each.
 
 **[AUTHOR-4] Exploratory rebuilt-judge arm scope.**
 P3 designates the arm exploratory but not its size. PROPOSED DEFAULT: full
@@ -88,6 +106,11 @@ only (P3; no post-selection). Alternative if cost binds: Phase 1's
 exploratory convention (1 seed, injected pairs only, excluded from gate
 math; pilot_protocol §5). Provenance: phase1b_precommitments.md P3;
 decision_memo_phase1.md §2 (KG2 branch); v6.1 §11.9 amendment #6.
+**Ruling (2026-06-12, A.M.): full-parity judge arm RATIFIED, with a
+pre-committed descope order** — if the AUTHOR-14 cost cap binds
+mid-matrix, the exploratory rebuilt-judge arm descopes FIRST (to
+injected-only, then out entirely); the confirmatory arms and baselines
+(two-tier v2, S1, S2, S3) are never descoped.
 
 **[AUTHOR-5] Fresh-draw mechanism and custody for the ORIGINAL five
 categories (fire counters, payload parameters, run seeds).**
@@ -112,6 +135,12 @@ values. Rationale: the blindness obligation is in ink and the holdout
 escrow is the committed pattern for satisfying it. Provenance: v6.1 §11.10
 item 3; RESOURCE_BUDGET.md §6; holdout_escrow_record.md;
 decisions/holdout_qualification_2026-06-12.md (qseed namespaces).
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED with amendment** — the
+wound-preserving payload ranges (the draw spec) are written and committed
+**in the ratification commit, before the draw executes**; the draw remains
+run-once / `secrets` / sealed / hash-public; matrix_escrow.json gitignored
+(verified via `git check-ignore` before writing); transmitted to the same
+holder; the loader never prints values.
 
 **[AUTHOR-6] Re-qualification scope for original pairs under changed
 conditions.**
@@ -133,6 +162,9 @@ qualification bar is frozen and the b1 environment demonstrably moved
 manipulation_table_s1_seed1.md; DEPENDENCY_VERSION.md §8 + rev-2 fixture
 note; holdout_qualification_2026-06-12.md Appendix 1 root-cause + Appendix
 2 (R1); dev_run_ledger (rev-4 regression 27/27).
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED** — one S1 qualification
+pass for the two b1 pairs at qseeds 910+, frozen rule, ledgered; executed
+on confirmation (this session), before any v2 build code.
 
 **[AUTHOR-7] S3 cost-matching basis for 1b.**
 Phase 1 calibrated heartbeat-k so S3's overhead matched S5's measured
@@ -151,6 +183,23 @@ first). Rationale for (a): P1's inheritance discipline plus embargo
 hygiene; the mismatch is reported, not hidden. Provenance:
 phase1b_precommitments.md E.3 + P1; archaeology_v2.md §E.3–E.4;
 holdout_escrow_record.md (b1 median 14).
+**Ruling (2026-06-12, A.M.): OVERRIDE to option (b).** S3's k per task is
+recalibrated from the **two-tier arm's measured clean overhead** using
+Phase 1's matching formula, transcribed verbatim from
+decisions/heartbeat_k_calibration.md (fd21d9a): *"k = ceil(worker_calls /
+n_revals) with n_revals = round(sentinel_overhead / revalidation_turn_cost)"*
+— with `sentinel_overhead`, `revalidation_turn_cost` (mean
+orchestrator-turn cost), and `worker_calls` taken as the per-task MEAN over
+ALL of that task's two-tier-arm clean cells (the Phase 1 source-run choice
+applied to the 1b primary arm's clean slice). Computed **after the
+two-tier arm's clean cells complete and before any S3 cell launches**;
+the computation is ledgered (dev-run ledger entry with inputs and
+resulting k per task); the inherited Phase 1 k values (a1=2, b1=21, c1=4,
+d1=5) are reported descriptively beside the recalibrated ones. **Author's
+rationale, recorded:** the inherited k matches a cost structure (judge)
+that no longer exists, and k=21 > b1's clean median of 14 would render S3
+structurally inert on b1, flattering v2's TTD comparison. The 1bKG4
+thresholds themselves inherit untouched.
 
 **[AUTHOR-8] Ex-ante recovery-class labels for the original nine pairs.**
 1bKG1 computes strict recall "on recoverable-class cells", and §11.10
@@ -167,6 +216,13 @@ labels gate the 1bKG1 denominator and the abort-economics clause; they
 cannot be derived mechanically for the original pairs. Provenance: RATIFIED
 VALUES 1bKG1; v6.1 §11.10 item 3; memo §3 (abort economics → CLAUSE);
 RESOURCE_BUDGET.md §3; DEPENDENCY_VERSION.md §3; deviations.md D19.
+**Ruling (2026-06-12, A.M.): manifest-plus-confirmation procedure.** The
+ex-ante recovery-class manifest for the nine original pairs (label +
+one-line rationale each, candidate retreat-condition classes flagged,
+incl. token_expiry post-D19) is drafted and presented to the author; the
+FROZEN stamp waits on the author's confirmation message. The confirmed
+manifest is recorded in §3a of this document and governs the 1bKG1
+denominator.
 
 **[AUTHOR-9] Wilson confidence level.**
 P2 #8 left the per-category lower-bound confidence at [freeze]; the
@@ -174,6 +230,7 @@ ratified text names "Wilson lower bounds" with no level. PROPOSED DEFAULT:
 95% (two-sided convention; any other number is equally data-free but
 non-standard). Provenance: phase1b_precommitments.md P2 #8; RATIFIED VALUES
 1bKG1.
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED** — 95%.
 
 **[AUTHOR-10] Two P2 placeholders never ratified — strike or value them.**
 (i) P2 #2's "time-to-first-false-interrupt on clean cells ≥ [freeze]
@@ -189,6 +246,9 @@ amendment #1); perturbation events reported descriptively. Rationale: the
 freeze may not invent values the ratification skipped; both rationales are
 already serviced by ratified clauses. Provenance: phase1b_precommitments.md
 P2 #2, #5 vs RATIFIED VALUES (absence); v6.1 §11.9 amendment #1.
+**Ruling (2026-06-12, A.M.): DEFAULTS RATIFIED, (i) and (ii)** — TTFFI
+struck from the gate set (descriptive only); no separate perturbation-rate
+threshold (descriptive only; hard clauses stand).
 
 **[AUTHOR-11] Amortized-view workload composition.**
 1bKG3's descriptive amortized view is "over a pre-specified 10-task
@@ -199,6 +259,7 @@ cells (no extra runs), reported per archetype, descriptive only. Rationale:
 the only reading that requires no new executions and no new measurement
 channel. Provenance: RATIFIED VALUES 1bKG3; phase1b_precommitments.md
 P2 #10.
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED.**
 
 **[AUTHOR-12] Probe-validity audit mechanics: sampling seed and auditor.**
 The hard gate specifies "a seeded 20% audit of probe-generated interrupts"
@@ -211,6 +272,10 @@ beside the gate output. Rationale: mirrors Phase 1's attribution-audit
 pattern (rule first, human audit on a fixed sample). Provenance: RATIFIED
 VALUES 1bKG1; phase1b_precommitments.md P2 #4; prereg.md 6.1 (TTD audit
 pattern).
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED with amendment** — sampling
+seed 1102; author audits per the P2 #4 criteria; additionally, an optional
+non-implementer spot-check of 3 audit rows is recorded as an INVITED
+(non-gating) strengthening.
 
 **[AUTHOR-13] Tooling pins: CLI version and model strings for 1b.**
 Phase 1 pinned CLI 2.1.170 wire-to-wire (matrix-close record; post-close
@@ -224,6 +289,7 @@ strings unchanged (the judge string applies to the exploratory arm only).
 Rationale: comparability with Phase 1 numbers wherever the gates compare
 across phases; pinning discipline is inherited apparatus. Provenance:
 pilot_protocol.md §3.5; RUNBOOK.md; decisions/matrix_close_2026-06-12.md.
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED.**
 
 **[AUTHOR-14] LLM cost cap for the v2 build + 1b matrix.**
 No ratified cap exists for 1b (Phase 1 ran ~$131 of a $300 cumulative
@@ -235,6 +301,10 @@ margin for v2 compile cells and re-qualification passes; queue halts at the
 cap and the author rules. Rationale: the only measured cost basis in the
 record. Provenance: kill_gates_final.md ops close-out;
 holdout_qualification_2026-06-12.md (session totals); AUTHOR-2 cell count.
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED** — $250 envelope (build ≤
+$50, matrix ≤ $200); if the cap binds mid-matrix, the AUTHOR-4 descope
+order applies (exploratory judge arm first; confirmatory arms and
+baselines never).
 
 **[AUTHOR-15] Consistency flags — paper draft and records (dispositions
 owed at next edit; nothing edited this session).**
@@ -257,6 +327,8 @@ paper/fse_draft.md (34bb7a0) §7 was checked against this assembly:
       revs ≤3 frozen); RB mechanics unaffected (hosted at rev ≥ 2). The
       spec is a frozen qualified artifact and is not edited; this note is
       the disposition.
+**Ruling (2026-06-12, A.M.): DEFAULT RATIFIED** — dispositions owed at the
+next paper edit as listed; nothing edited this session.
 
 ---
 
@@ -420,18 +492,37 @@ Clarifications bound to the transcription (no new content):
   apparatus, prereg custody discipline; archaeology_v2 Phase 0 is the
   precedent the replay gate consumes).
 
-**Not determined by the records — DO NOT BUILD until ruled:** seeds per
-cell and totals (AUTHOR-2); holdout seeds-per-pair (AUTHOR-3); exploratory
-arm scope (AUTHOR-4); original-category draws and custody (AUTHOR-5);
-re-qualification scope (AUTHOR-6); S3 matching (AUTHOR-7); original-pair
-labels (AUTHOR-8); tooling pins (AUTHOR-13); cost cap (AUTHOR-14).
+**Resolved by the 2026-06-12 rulings (recorded beside each item):** 3
+seeds per (task, variant), clean cells every arm, 49 cells/arm, **245
+cells total** (AUTHOR-2); holdouts = RB-a1 + DV-b1 × 5 escrowed seeds
+(AUTHOR-3); exploratory judge arm at full parity with pre-committed
+descope order (AUTHOR-4); original-category draws sealed via
+matrix_escrow.json with the draw spec committed in the ratification
+commit, before the draw (AUTHOR-5); b1-pair re-qualification at qseeds
+910+ (AUTHOR-6); S3 k recalibrated from the two-tier arm's clean cells,
+Phase 1 formula verbatim, before any S3 cell launches (AUTHOR-7 override);
+CLI pinned at build start + Phase 1 model strings (AUTHOR-13); $250
+envelope with the AUTHOR-4 descope order (AUTHOR-14). **Open: the
+AUTHOR-8 manifest below (§3a), pending the author's confirmation — the
+FROZEN stamp waits on it.**
+
+### 3a. Ex-ante recovery-class manifest — original nine pairs (AUTHOR-8)
+
+*[PENDING AUTHOR CONFIRMATION — drafted and presented to the author
+2026-06-12; recorded here verbatim upon the confirmation message; governs
+the 1bKG1 recoverable-class denominator. Holdout labels are fixed by the
+qualified specs and are not part of this manifest: RB mechanical rule at
+the drawn N/Q0 (RESOURCE_BUDGET.md §3); DV always recoverable, retreat
+never justified (DEPENDENCY_VERSION.md §3).]*
 
 ## 4. Category-gate denominator
 
-Carried as **AUTHOR-1** (top block) — presented with options, recommended
-default, and provenance logic; **not resolved by this assembly.** The gate
-text in §2 is transcribed verbatim either way; AUTHOR-1 fixes only the
-denominator universe of its categorical clause and the holdouts' reporting
+**Ruled: AUTHOR-1 option (a) RATIFIED (2026-06-12, A.M.).** The
+categorical hard clause ranges over the original five categories; the
+holdout categories sit inside the overall ≥60% recall denominator and are
+reported per-category with Wilson lower bounds (95%, AUTHOR-9),
+descriptive only where n<3. The gate text in §2 is transcribed verbatim;
+this ruling fixes its denominator universe and the holdouts' reporting
 mode.
 
 ## 5. Execution and schedule
@@ -452,9 +543,21 @@ mode.
    Harness graduations permanent, all systems: strict reply schemas both
    directions, void-run invariant, launcher probe, version pin, canary
    isolation (v6.1 §11.9).
+1a. **Ratification-session sequence (per the 2026-06-12 rulings), upon
+   AUTHOR-8 confirmation and before any v2 build code:** (i) FROZEN stamp
+   committed; (ii) the AUTHOR-5 draw spec written and committed in the
+   ratification commit, then the run-once matrix-escrow draw executes and
+   its custody record is committed (SHA-256 only; no values printed);
+   (iii) the AUTHOR-6 b1-pair re-qualification pass runs (qseeds 910+,
+   frozen rule, ledgered). No v2 build code in the ratification session.
 2. **Matrix launch: 2026-06-23 → 2026-07-15**, unattended, continuous,
    concurrency 1, pause-on-demand; zero decisions scheduled in this window
-   by design (v6.1 §13).
+   by design (v6.1 §13). **In-matrix ordering (AUTHOR-7 override):** the
+   two-tier arm's clean cells complete first; S3's per-task k is then
+   computed by the verbatim Phase 1 formula (AUTHOR-7) and ledgered before
+   any S3 cell launches; no other gate-relevant quantity is read from the
+   clean cells at that point (the k computation consumes overhead,
+   orchestrator-turn cost, and call counts only).
 3. **Product-launch precedence:** the product launch (Jul 15) outranks the
    matrix; the queue pauses **losslessly** on demand (memo §7; v6.1 §11.10
    item 6; RUNBOOK interruption semantics: stale running jobs reset to
@@ -522,7 +625,10 @@ mode.
    (the "Ratified: …, A.M." pattern of memo §4), the status banner is
    changed to FROZEN, and the commit of that revision constitutes the
    ratification signature — mirroring the memo's signature clause
-   (memo, Signature; prereg.md freeze pattern).
+   (memo, Signature; prereg.md freeze pattern). **State 2026-06-12: all
+   fifteen rulings received and recorded inline; per the AUTHOR-8 ruling,
+   the FROZEN stamp additionally waits on the author's confirmation of the
+   §3a recovery-class manifest, presented 2026-06-12.**
 2. The freeze commit records SHA-256 hashes of: this file as frozen; the
    two qualified holdout specs (benchmark/holdouts/RESOURCE_BUDGET.md,
    DEPENDENCY_VERSION.md); and restates the escrow hash (§6.3). v2
