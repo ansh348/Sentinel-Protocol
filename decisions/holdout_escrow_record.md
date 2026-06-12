@@ -39,3 +39,26 @@ could re-derive them. The draw script refuses to run twice.
 holder (advisor or co-founder, per memo §5(b)); the Phase 1b harness
 consumes it programmatically at 1b launch; **the author does not open
 it.** Integrity at launch is verified against the SHA-256 above.
+
+## Transmission record (2026-06-12)
+
+The escrow file was transmitted by the author to the escrow holder —
+Zeynep Sağlık, co-founder, non-implementer — via WhatsApp on 2026-06-12
+at 14:45 local (author-attested), as a single file
+(holdout_escrow.json, ~9 kB) accompanied by the custody SHA-256 in the
+same thread, enabling the holder to verify her copy against this public
+record independently.
+Receipt confirmation: [PENDING — to be appended on the holder's
+acknowledgment].
+Local-copy integrity at transmission: SHA-256 recomputed and matched
+(df1dcd8bd1cad04f815576cc1d6876807e95bbf25ffc959ada40ff0fa2bb3c88;
+git check-ignore coverage re-verified in the same step).
+Standing custody rules restated: the local copy is consumed
+programmatically by the harness at Phase 1b launch; the author does not
+open it; the holder produces her copy only on the author's written
+request; the draw script's run-once guard remains in force.
+
+**Memo §5 condition (b) is hereby CLOSED**: both held-out categories
+qualified (decisions/holdout_qualification_2026-06-12.md, Appendix 2),
+superset drawn once, values sealed, custody split between holder and
+public hash.
