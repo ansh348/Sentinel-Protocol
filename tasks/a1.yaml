@@ -4,10 +4,10 @@
 # until then.
 id: a1
 archetype: api_aggregation
-# Phase 1b runs on the rev-3 world (held-out-category surface; see
+# Phase 1b runs on the rev-4 world (held-out-category surface; see
 # benchmark/holdouts/). Banked Phase 1 world_config.json files default to
 # rev 1 and replay byte-identically.
-world_rev: 3
+world_rev: 4
 goal: >
   Produce a consolidated price-and-availability report for all six catalog
   SKUs as one JSON object keyed by SKU id. Each value must be an object with

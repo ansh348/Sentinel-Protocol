@@ -1,17 +1,20 @@
-"""DEPENDENCY_VERSION re-qualification under spec rev 2 (author ruling
+"""DEPENDENCY_VERSION re-qualification under spec rev 3 (author ruling #2,
 2026-06-12; benchmark/holdouts/DEPENDENCY_VERSION.md Section 7).
 
 RB's verdict stands; this re-runs DV only: 3 clean + 3 injected S1 on b1,
-rev-3 world, fresh seed namespace qseed-904/905/906 (901-903 are spent),
-clean arm re-run (no arm reuse across world revs). N = 2, recorded per the
-ruling: the latest counter at which the wound stays live across worker
-dispatch orders (the banked b1 enumerations land at counters 1-3) while
-the run still begins under genuine v1.x behavior.
+rev-4 world (page_size -> page_limit hardened rename), fresh seed
+namespace qseed-907/908/909 (901-906 are spent), b1-scoped worker turn
+cap 24 (ruling #2 R1), N = 1 (ruling #2 R2: deploy-time skew; the v1.x
+assumption is documentary). Clean arm re-run — no arm reuse across world
+revs or cap configs.
 
 PASS bar unchanged — and wound-attributed: injected failures count only
 when caused by truncated-data wrong output (itemized per run from traces);
 clean must pass >= 2/3, and a clean failure rate >= 2/3 is the
 fixture-weight STOP branch.
+
+The spec-rev-2 attempt (qseed-904/905/906, rev 3, N=2) is preserved in
+runs/holdout_requalification_dv/; this driver writes to a separate dir.
 """
 from __future__ import annotations
 
@@ -25,13 +28,13 @@ sys.path.insert(0, str(REPO_ROOT))
 from analysis.holdout_qualification import last_counter_and_detail  # noqa: E402
 from conductor.run_one import RunCrash, run_one  # noqa: E402
 
-QSEEDS = (904, 905, 906)
+QSEEDS = (907, 908, 909)
 RUNS_ROOT = REPO_ROOT / "runs"
-OUT_PATH = RUNS_ROOT / "holdout_requalification_dv" / "summary.json"
+OUT_PATH = RUNS_ROOT / "holdout_requalification_dv2" / "summary.json"
 
 PLAN = [
     ("b1", None, None),
-    ("b1", "silent_minor_bump", 2),
+    ("b1", "silent_minor_bump", 1),
 ]
 
 

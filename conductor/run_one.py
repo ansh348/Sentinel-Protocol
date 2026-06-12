@@ -569,7 +569,13 @@ class Conductor:
                     .replace("{subtask}", step.subtask))
         result = run_claude(
             model=WORKER_MODEL, system_prompt=rendered, prompt=step.subtask,
-            max_turns=14,
+            # Per-task override (author ruling #2 R1, 2026-06-12): b1's
+            # rev >= 2 fixture pack puts single-worker plans at 15-20 curls,
+            # so b1 carries worker_max_turns: 24 in its yaml; every other
+            # task keeps the Phase 1 default of 14. Applied identically to
+            # clean and injected arms; live sessions only (replays never
+            # run workers).
+            max_turns=int(self.task.get("worker_max_turns", 14)),
             allowed_tools=f"Bash(curl http://localhost:{self.port}/*)",
             isolated_home=self.session_home,
             on_spawn=lambda pid: self.live_pids.__setitem__(instance_id, pid))

@@ -396,10 +396,12 @@ class WorldState:
         return DEFAULT_PAGE_SIZE
 
     def page_size_param(self, path: str) -> str:
-        """The pagination parameter the service honors (DV spec rev 2: the
-        v2.0 bump silently renames page_size -> limit; the manifest
-        documents the rename)."""
+        """The pagination parameter the service honors. The v2.0 bump
+        silently renames page_size; the rename target is rev-dependent —
+        rev 3: "limit" (frozen, DV spec rev 2); rev >= 4: "page_limit"
+        (DV spec rev 3, author ruling #2 — closes the habit-typed
+        parameter escape). The manifest documents the rename."""
         if (self.bumped_page_size is not None
                 and self._in_family(path, self.bump_family)):
-            return "limit"
+            return "page_limit" if self.config.world_rev >= 4 else "limit"
         return "page_size"

@@ -19,14 +19,19 @@ Draw rules (verbatim from the specs; DV per spec rev 2, author ruling
 - RESOURCE_BUDGET (quota_cliff): N uniform in [40%, 60%] of the task's clean
   median (a1 24, c1 12, d1 21 — Phase 1 finals; b1 from the rev-3
   re-qualification clean median), floored bounds; Q0 uniform [8, 14]
-- DEPENDENCY_VERSION (silent_minor_bump): N uniform {2, 3} (mid-run, never
-  1, inside the pre-enumeration live window — spec rev 2 Section 2); post
-  version from {2.0.0, 2.0.1}; post page size uniform [3, 6] for b1
-  (8-file repo), [3, 5] for a1/c1/d1 (6-item collections) — the
-  author-ratified constraint that every drawn post size sits STRICTLY
-  BELOW the host collection size is asserted here in code, not only in
-  the spec; pre page size fixed 100, pre version fixed 1.4.0, parameter
-  rename page_size -> limit fixed
+- DEPENDENCY_VERSION (silent_minor_bump): N = 1 fixed (author ruling #2,
+  2026-06-12: the category models deploy-time skew — the plan's v1.x
+  assumption is documentary, formed from the task description and surface
+  appendix regardless of N, and mid-run firing is structurally
+  unsatisfiable on single-enumeration hosts, as the spec-rev-2
+  re-qualification proved; the prior mid-run requirement is withdrawn by
+  the author as a category-inappropriate import); post version from
+  {2.0.0, 2.0.1}; post page size uniform [3, 6] for b1 (8-file repo),
+  [3, 5] for a1/c1/d1 (6-item collections) — the author-ratified
+  constraint that every drawn post size sits STRICTLY BELOW the host
+  collection size is asserted here in code, not only in the spec; pre
+  page size fixed 100, pre version fixed 1.4.0, parameter rename
+  page_size -> page_limit fixed (ruling #2 R3)
 - service family: FIXED per task by the specs, recorded per cell
 """
 from __future__ import annotations
@@ -40,7 +45,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = REPO_ROOT / "escrow" / "holdout_escrow.json"
-QUAL_SUMMARY = (REPO_ROOT / "runs" / "holdout_requalification_dv"
+QUAL_SUMMARY = (REPO_ROOT / "runs" / "holdout_requalification_dv2"
                 / "summary.json")
 
 TASKS = ("a1", "b1", "c1", "d1")
@@ -58,7 +63,11 @@ PHASE1_CLEAN_MEDIANS = {"a1": 24, "c1": 12, "d1": 21}
 HOST_COLLECTION_SIZE = {"a1": 6, "b1": 8, "c1": 6, "d1": 6}
 DV_POST_PAGE_RANGE = {"a1": (3, 5), "b1": (3, 6), "c1": (3, 5), "d1": (3, 5)}
 DV_POST_VERSIONS = ("2.0.0", "2.0.1")
-DV_N_CHOICES = (2, 3)
+# Ruling #2 R2: deploy-time skew fires at N=1, uniformly — the v1.x
+# assumption is documentary, and mid-run firing is structurally
+# unsatisfiable on single-enumeration hosts (proven by the spec-rev-2
+# re-qualification: enumeration was the run's first call in 3/3 seeds).
+DV_N_CHOICES = (1,)
 RB_Q0_RANGE = (8, 14)
 
 # Author-ratified constraint (ruling 2026-06-12, item 5): drawn post sizes

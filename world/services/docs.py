@@ -37,13 +37,14 @@ def _doc_key(doc: Document) -> str:
 @router.get("/passages")
 def list_passages(request: Request, page: Optional[int] = None,
                   page_size: Optional[int] = None,
-                  limit: Optional[int] = None) -> dict:
+                  limit: Optional[int] = None,
+                  page_limit: Optional[int] = None) -> dict:
     require_token(request)
     state: WorldState = request.app.state.ctx.state
     full = [{"id": p["id"], "title": p["title"]}
             for p in state.passages.values()]
     return paginated(state, "/docs/passages", "passages", full,
-                     page, page_size, limit)
+                     page, page_size, limit, page_limit)
 
 
 @router.get("/passages/{passage_id}")
@@ -61,7 +62,8 @@ def get_passage(passage_id: str, request: Request) -> dict:
 @router.get("/search")
 def search(q: str, request: Request, page: Optional[int] = None,
            page_size: Optional[int] = None,
-           limit: Optional[int] = None) -> dict:
+           limit: Optional[int] = None,
+           page_limit: Optional[int] = None) -> dict:
     require_token(request)
     state: WorldState = request.app.state.ctx.state
     needle = q.lower()
@@ -72,7 +74,7 @@ def search(q: str, request: Request, page: Optional[int] = None,
     ]
     return {"query": q,
             **paginated(state, "/docs/search", "results", hits,
-                        page, page_size, limit)}
+                        page, page_size, limit, page_limit)}
 
 
 @router.post("/validate")

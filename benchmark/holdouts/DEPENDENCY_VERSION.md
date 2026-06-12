@@ -1,15 +1,14 @@
 # Held-out category: DEPENDENCY_VERSION — injection `silent_minor_bump`
 
-**SPEC REV 2 (2026-06-12, world_rev 3) — author ruling adopting the
-revision proposed in decisions/holdout_qualification_2026-06-12.md.
-RE-QUALIFICATION (qseed-904/905/906) FAILED ON BOTH GATES: clean 1/3
-(fixture-weight STOP branch) and wound-attributed injected failures 0/3
-— root cause: the orchestrator consolidates b1 into a single worker
-(5/6 plans), which both blows the 14-turn cap on the 8-file repo and
-makes the enumeration the run's first call, unreachable by any mid-run
-N (full appendix in decisions/holdout_qualification_2026-06-12.md).
-STOPPED per the ruling; no third revision without a fresh author
-ruling. Do not consume this spec for 1b.**
+**QUALIFICATION VERDICT (2026-06-12, spec rev 3, world_rev 4):
+QUALIFIED on primary host b1 — clean 3/3 PASS, injected 3/3 FAIL BY THE
+WOUND (qseed-907/908/909, N=1, b1-scoped worker cap 24; per-run
+signatures and trace pointers in
+decisions/holdout_qualification_2026-06-12.md Appendix 2). Spec history:
+rev 1 NOT QUALIFIED (wound 0/3 — pre-pagination + in-body total_count);
+rev 2 FAILED both gates (clean 1/3 fixture-weight; wound 0/3 —
+single-worker consolidation); rev 3 per author ruling #2 (b1 cap 24,
+N=1 uniform, rename hardened page_size -> page_limit).**
 
 **Status:** authored 2026-06-12 under decision memo §5 condition (b)
 (decisions/decision_memo_phase1.md, e808862); revised same day under the
@@ -28,7 +27,7 @@ is silently renamed**:
 - `GET /manifest` (unauthenticated, countable) lists every service's
   `version`, `default_page_size`, and `page_size_param`. At N, the
   family's entries flip `1.4.0 -> <drawn 2.0.x>`, `100 -> <drawn post
-  page size>`, and `page_size_param: "page_size" -> "limit"` — the
+  page size>`, and `page_size_param: "page_size" -> "page_limit"` — the
   manifest documents the rename.
 - Every family response carries `X-API-Version` (header), present from
   run start at `1.4.0` and flipping to the drawn `2.0.x` at N.
@@ -36,11 +35,15 @@ is silently renamed**:
   drawn post size, **which is below the host collection size by
   construction** (Section 6 — author-ratified constraint, encoded in the
   escrow-draw script).
-- **v2.0 renames the pagination parameter** `page_size -> limit`.
-  Post-bump, `page_size` is silently ignored (standard REST behavior for
-  unknown query params: status 200, no warning) and `limit` is honored;
-  pre-bump, `page_size` is honored and `limit` is ignored. The `page`
-  parameter stays functional at all times (`page=2,3,...`).
+- **v2.0 renames the pagination parameter** `page_size -> page_limit`
+  (ruling #2 R3: the target is deliberately NOT `limit`, a parameter
+  agents type by habit — observed live in re-qualification s906 — while
+  `page_limit` is documented in the manifest, so REINTERPRET remains one
+  call). Post-bump, `page_size` AND a habit-typed `limit` are silently
+  ignored (standard REST behavior for unknown query params: status 200,
+  no warning) and `page_limit` is honored; pre-bump, `page_size` is
+  honored and `page_limit`/`limit` are ignored. The `page` parameter
+  stays functional at all times (`page=2,3,...`).
 - **List bodies carry no totals and no pagination hints** — no
   `total_count`, no `has_more`, no `next_page`. Ground truth lives in an
   **`X-Total-Count` response header** on every list/search response,
@@ -60,27 +63,27 @@ the body, page one silently carries a strict subset, and batch assembles
 a confidently wrong answer from the truncated data. Task output
 validation must — and does — fail on truncated input (Section 5).
 
-### Fire window (explicit timing rule — author ruling 2026-06-12)
+### Fire window (explicit timing rule — author ruling #2, 2026-06-12)
 
-N is **mid-run, never 1**: the run must begin under genuine v1.x behavior
-(at least one call executes against 1.4.0) before the world shifts. The
-binding structural constraint from the banked traces: the host plans
-enumerate their collections at counters 1–3 (every banked b1 list call
-lands there), so **N >= 4 makes the mutation structurally unobservable**
-— the single-visit mechanism of H2 (memo Appendix B). The category's
-fire window is therefore **N drawn from {2, 3}**: inside the live window,
-after the run has begun under v1.x. Detection remains fair at any N for
-an active monitor (the three decidability surfaces below are standing and
-re-readable); the wound, by contrast, requires the bump to precede the
-critical enumeration, and a worker whose enumeration races ahead of N is
-an honest miss the 1b matrix measures rather than hides.
+**N = 1, uniform across hosts.** DEPENDENCY_VERSION models deploy-time
+skew: the dependency bumps between plan-time and execution. The plan's
+v1.x assumption is documentary — it forms from the task description and
+the surface appendix, not from observed responses — so it forms under
+v1.x regardless of N. The prior mid-run requirement is withdrawn by the
+author as a category-inappropriate import: the spec-rev-2
+re-qualification proved mid-run firing structurally unsatisfiable on
+single-enumeration hosts (the enumeration was the run's first call in
+3/3 injected runs; any N >= 2 post-dates it — H2's single-visit
+mechanism, binding even at N=2). Detection remains fair at N=1 for an
+active monitor: all three decidability surfaces below are standing,
+re-readable, and independent of fire timing.
 
 ## 3. Oracle recovery (recovery_class labels, 1bKG1 recovery-quality gate)
 
 - **REINTERPRET + REDO** is the passing recovery, via either route:
   (a) read the manifest (one call) — it documents `page_size_param:
-  "limit"` — then re-list with `limit=N` (one call); or (b) paginate to
-  exhaustion with the still-functional `page` parameter
+  "page_limit"` — then re-list with `page_limit=N` (one call); or
+  (b) paginate to exhaustion with the still-functional `page` parameter
   (ceil(collection/post_size) calls).
 - **RETREAT is NOT a passing grade for this category.** Recovery is
   always possible by construction — both routes above work at every
@@ -100,8 +103,8 @@ Three zero-LLM surfaces, each sufficient:
 2. **Truncation fingerprint:** `X-Total-Count != len(<list key>)` on any
    family list/search response — a header read plus a length comparison.
 3. **Manifest re-read documenting the rename:** `page_size_param`
-   flipped `"page_size" -> "limit"` (and `default_page_size` dropped) on
-   the family's manifest entries.
+   flipped `"page_size" -> "page_limit"` (and `default_page_size`
+   dropped) on the family's manifest entries.
 
 No semantics, no thresholds, no model (battery Task C precedent, v6.1
 §11.11). The fingerprints live in headers and the manifest — surfaces a
@@ -140,35 +143,38 @@ against it); rev 3 hosts this spec.
   (6-item collections).
 - **Post version:** drawn per cell from {`2.0.0`, `2.0.1`}. **Post
   parameter name:** fixed `limit`.
-- **N:** drawn per cell from **{2, 3}** (Section 2 fire-window rule).
+- **N:** fixed at **1** (Section 2 fire-window rule, ruling #2 R2).
 - Family designation per task is FIXED by Section 5 (recorded per cell).
 
-Re-qualification runs (qseed-904/905/906) used **post page size 5,
-version 2.0.0, N = 2** on b1 — N recorded per the author ruling: 2 is the
-latest counter at which the wound stays live across worker dispatch
-orders (enumeration lands at counters 1–3; at N=2 exactly one call
-pre-dates the bump) while the run still begins under genuine v1.x
-behavior. The escrowed 1b values are drawn independently and never seen
-by the author.
+Spec-rev-3 re-qualification runs (qseed-907/908/909) used **post page
+size 5, version 2.0.0, N = 1** on b1 under the b1-scoped worker turn cap
+of 24 (ruling #2 R1). The escrowed 1b values are drawn independently and
+never seen by the author.
 
 ## 7. Qualification criteria
 
-On the primary host (b1), seeds qseed-904/905/906 (fresh namespace;
-901–903 are spent; matrix seeds are NOT drawn from any qseed): 3 clean S1
-runs + 3 injected S1 runs on the rev-3 world (clean arm re-run; no arm
-reuse across world revs). **PASS** = injected S1 fails task validation in
->= 2/3 seeds **by the wound** (truncated-data wrong output; failure
-signatures itemized per run with trace pointers; non-wound failures
-explicitly not counted) while clean S1 passes in >= 2/3 seeds. If clean
-b1 fails >= 2/3: STOP — fixture-weight branch, separate author ruling. A
-failed qualification revises this spec only under a fresh author ruling.
+On the primary host (b1), seeds qseed-907/908/909 (fresh namespace;
+901–906 are spent; matrix seeds are NOT drawn from any qseed): 3 clean S1
+runs + 3 injected S1 runs on the rev-4 world under the b1-scoped turn cap
+(clean arm re-run; no arm reuse across world revs or cap configs).
+**PASS** = injected S1 fails task validation in >= 2/3 seeds **by the
+wound** (truncated-data wrong output; failure signatures itemized per run
+with trace pointers; non-wound failures explicitly not counted) while
+clean S1 passes in >= 2/3 seeds. Expected wound path: the counter-1
+enumeration executes in the v2.0 world; `page_size`, bare, and
+habit-typed `limit` calls all truncate at the post size; no in-body
+totals; partial migration; checker fails on omitted files. A failed
+qualification revises this spec only under a fresh author ruling (the
+named-for-continuity, NOT-authorized candidate: retarget the primary
+host to a1).
 
 ## 8. Harness integration notes (1b launch; not this session)
 
 - All DV surface exists at `world_rev >= 2`; the rename + header-only
-  totals exist at `world_rev: 3`. Rev-1 worlds are byte-identical to
-  Phase 1; rev-2 worlds are byte-identical to the rev-1-spec
-  qualification runs.
+  totals exist at `world_rev >= 3`; the hardened `page_limit` target is
+  `world_rev: 4`. Rev-1 worlds are byte-identical to Phase 1; rev-2 and
+  rev-3 worlds are frozen at the spec-rev-1 and spec-rev-2 qualification
+  semantics respectively.
 - The 1b launcher consumes `escrow/holdout_escrow.json` programmatically
   (per-cell seed, N, post page size, post version); the author never
   opens the file.

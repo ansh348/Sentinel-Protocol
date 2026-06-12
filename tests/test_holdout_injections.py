@@ -362,3 +362,65 @@ def test_rev3_quota_cliff_unchanged(make_world):
     dead = world.client.get("/inventory/items", headers=h)
     assert dead.status_code == 429
     assert dead.json() == {**QUOTA_EXHAUSTED_BODY, "quota_remaining": 0}
+
+
+# ------------------------------- rev 4 (DV spec rev 3: page_limit hardening)
+
+def test_rev4_pre_bump_v1x_unchanged(make_world):
+    """Rev 4 pre-bump: v1.x semantics — page_size honored; page_limit and
+    limit both unknown -> ignored; header-only totals intact."""
+    world = make_world(world_rev=4)
+    files = world.client.get("/repo/files")
+    assert files.json() == {"files": sorted(REPO_FILES_V2)}
+    assert files.headers["x-total-count"] == "8"
+    assert files.headers["x-api-version"] == "1.4.0"
+    assert len(world.client.get("/repo/files",
+                                params={"page_size": 3}).json()["files"]) == 3
+    assert len(world.client.get("/repo/files",
+                                params={"limit": 3}).json()["files"]) == 8
+    assert len(world.client.get("/repo/files",
+                                params={"page_limit": 3}).json()["files"]) == 8
+    manifest = world.client.get("/manifest").json()
+    assert manifest["services"]["repo"] == {
+        "version": "1.4.0", "default_page_size": 100,
+        "page_size_param": "page_size"}
+
+
+def test_rev4_bump_honors_only_page_limit(make_world):
+    world = make_world(world_rev=4)
+    inject(world.client, "silent_minor_bump", family=["/repo"],
+           version_to="2.0.0", page_size_to=5)
+
+    # pre-armored page_size AND habit-typed limit are both inert post-bump
+    for params in ({"page_size": 100}, {"limit": 100}, {}):
+        r = world.client.get("/repo/files", params=params)
+        assert r.status_code == 200
+        assert r.json() == {"files": sorted(REPO_FILES_V2)[:5]}, params
+        assert "total_count" not in r.json()
+        assert r.headers["x-total-count"] == "8"
+
+    # page_limit is the honored rename target; manifest documents it
+    full = world.client.get("/repo/files", params={"page_limit": 100})
+    assert full.json()["files"] == sorted(REPO_FILES_V2)
+    manifest = world.client.get("/manifest").json()
+    assert manifest["services"]["repo"] == {
+        "version": "2.0.0", "default_page_size": 5,
+        "page_size_param": "page_limit"}
+    assert manifest["services"]["docs"]["page_size_param"] == "page_size"
+
+    # page iteration still recovers
+    page2 = world.client.get("/repo/files", params={"page": 2}).json()
+    assert page2["files"] == sorted(REPO_FILES_V2)[5:]
+
+
+def test_rev3_rename_target_frozen_at_limit(make_world):
+    """Rev-3 worlds keep honoring `limit` post-bump (spec-rev-2
+    re-qualification runs replay against rev 3)."""
+    world = make_world(world_rev=3)
+    inject(world.client, "silent_minor_bump", family=["/repo"],
+           version_to="2.0.0", page_size_to=5)
+    assert world.client.get("/repo/files",
+                            params={"limit": 100}).json()["files"] == \
+        sorted(REPO_FILES_V2)
+    assert world.client.get("/manifest").json()["services"]["repo"][
+        "page_size_param"] == "limit"

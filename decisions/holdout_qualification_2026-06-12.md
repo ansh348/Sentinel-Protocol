@@ -142,7 +142,11 @@ wound was unreachable.
 
 **The orchestrator consolidates b1 into a single worker in 5 of 6 plans**
 (seeds 901–906; the task yaml seeds three worker steps and fan_out 4;
-Sonnet plans `[('s1','w1')]` anyway):
+Sonnet plans `[('s1','w1')]` anyway). Recorded as benchmark texture per
+author ruling #2 R4 (no fan-out mandate — prompting the plan shape would
+contaminate orchestrator autonomy, the thing the benchmark measures):
+**the sole clean pass of the spec-rev-2 batch (s905) was also the sole
+multi-worker plan.**
 
 1. *Fixture weight:* one worker x 8-file repo = 15–20 curls against the
    14-turn worker cap — clean b1 became a cap-boundary coin flip (today:
@@ -165,3 +169,45 @@ post<=4 while cutting ~4 calls); raise the b1 worker turn cap
 (task-identity cost); retarget DV's primary host or fire rule (e.g.
 N keyed to the redo wave). RESOURCE_BUDGET's qualified verdict is
 unaffected. Session totals: $5.20 of the $25 cap.
+
+---
+
+# APPENDIX 2 — DV spec rev 3 re-qualification: QUALIFIED (author ruling #2)
+
+Author ruling #2 (2026-06-12) resolved the STOP: R1 b1-scoped worker
+turn cap 14 -> 24 (yaml `worker_max_turns`, a1/c1/d1 untouched, RB
+conditions undisturbed; config diff verified scope); R2 fire rule N=1
+uniform (deploy-time skew — the v1.x assumption is documentary; mid-run
+withdrawn as category-inappropriate); R3 rename target hardened
+`page_size -> page_limit` (closes the habit-typed `limit` escape, s906),
+world_rev 4 with rev <= 3 frozen; R4 no fan-out mandate (consolidation
+recorded as benchmark texture above). Implementation: suite 116/116;
+banked Phase 1 replay byte-identity 27/27 under rev-4 code
+(runs/archaeology_v2/replay_check_rev4_regression.json). Driver:
+analysis/holdout_requalification_dv.py (qseed-907/908/909, N=1, post
+page size 5, version 2.0.0); detail
+runs/holdout_requalification_dv2/summary.json; $2.58.
+
+## Verdict: PASS — clean 3/3, injected 3/3 FAIL BY THE WOUND
+
+| arm | seed | result | failure signature (itemized) | trace pointer |
+|---|---|---|---|---|
+| clean | 907 | PASS | — (14 calls, migration complete, validate passed) | runs/b1-S1-clean-s907 |
+| clean | 908 | PASS | — (14 calls) | runs/b1-S1-clean-s908 |
+| clean | 909 | PASS | — (15 calls) | runs/b1-S1-clean-s909 |
+| injected | 907 | **FAIL (wound)** | fired @1; lists @1 (bare, 5 files), @13 (page=1, 5); tax.py never touched; validate failed references_resolve x2; checker: `src/tax.py: stale annotation`. (A `page=2` call at counter 26 — the run's final call — revealed the tail too late to act.) | runs/b1-S1-silent_minor_bump-s907 |
+| injected | 908 | **FAIL (wound)** | fired @1; the expected path verbatim: pre-armored `page_size=100` lists @1 and @12 both silently truncated to 5 files; tax.py never touched; validate failed x4; checker: `src/tax.py: stale annotation`. Worker output fragility co-occurred but is immaterial: the migration omitted tax.py in world state | runs/b1-S1-silent_minor_bump-s908 |
+| injected | 909 | **FAIL (wound)** | fired @1; four bare lists (@1/@22/@27/@40), all truncated to 5; tax.py never touched; validate failed references_resolve x6 — the run died fighting the wound; checker: `src/tax.py: stale annotation` | runs/b1-S1-silent_minor_bump-s909 |
+
+Wound attribution rule satisfied: every counted failure shows
+truncated-data wrong output (hidden annotation site omitted from the
+migration, evidenced in ground-truth world state by the checker's
+stale-annotation line), not mere agent fragility — fragility co-occurred
+in s908/s909 and could not have changed the outcome (the workers could
+not see tax.py to migrate it). Instrument clean: injection fired at
+exactly N=1 via the counter path in 3/3; clean arm under the new cap
+passed 3/3 with zero turn-cap exits.
+
+**DEPENDENCY_VERSION (spec rev 3) is QUALIFIED on its primary host b1.**
+Both held-out categories now stand qualified; memo §5 condition (b)
+proceeds to the escrow draw (decisions/holdout_escrow_record.md).
