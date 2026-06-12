@@ -771,3 +771,72 @@ worker requests (artifact-evaluation fidelity).
 **Proposed remediation (for the author; NOT applied):** record a base64
 `body_raw` alongside the parsed body when `_parse_json` falls back to
 lossy decoding.
+
+---
+
+## D23 — b1 original-injected pairs exit the Phase 1b matrix
+
+**Date:** 2026-06-13 (author ruling on decisions/b1_requalification_2026-06-12.md,
+998be42; before any v2 build code exists, blind to effect direction on
+v2's measured recall). **Affects:** the Phase 1b matrix cell set. This
+deviation AMENDS the frozen prereg_1b.md (6c8cc47) via its §7 deviation
+mechanism — the frozen blob is not edited; this record governs.
+
+### Ruling
+
+1. **b1+schema_drift and b1+gate_skip_trap are REMOVED from the Phase 1b
+   injected cell set** (the re-qualification record's option e). Matrix:
+   49 → **43 cells/arm, 215 total**. b1 clean cells remain (they serve
+   the 1bKG2 clean-parity gate and the AUTHOR-7 S3 k-calibration).
+   DV-on-b1 holdout cells remain (qualified at spec rev 3 against the
+   competent batch).
+2. **Rationale of record:** re-qualification under changed-but-ratified
+   conditions (ruling #2 R1 cap 24; rev-4 fixture pack) showed both
+   wounds are conditional on baseline weakness — s910 turn-budget
+   self-healing, s911 write-side clobber, the gate trap inert absent
+   batch error. Per D17's all-QUALIFIED precondition, cells resting on
+   dead qualifications cannot enter the matrix. Re-crippling the
+   baseline (option d, cap rollback) is rejected on principle: the
+   benchmark qualifies wounds against the competent batch, not a
+   suffocated one.
+3. **The sealed matrix escrow
+   (2a9aed0a386df2f0fe5fa2122b2d85114f699eea8d6b2085df786cbeb6204e0e)
+   STANDS:** the six dropped cells' draws go unconsumed; the 1b loader
+   skips them; no redraw, no unsealing. Recorded in
+   decisions/matrix_escrow_record.md.
+4. **Findings of record (routed to the paper's benchmark section):**
+   (i) **competence-as-immunity** — improving the baseline (the cap
+   raise ruled for DV fixture-weight) un-qualified two previously
+   qualified injections; benchmark wounds must be re-validated whenever
+   the baseline strengthens. (ii) **WRITE-SIDE SINGLE-VISIT** (named) —
+   an agent's own writes can erase world changes it never observed; the
+   companion finding to Phase 1's read-side single-visit bound (H2).
+   Trace pointer: runs/b1-S1-schema_drift-s911 (pre-drift read @c2,
+   injection fired @c7, post-drift migration PUT @c10 overwrote the
+   drift sight-unseen).
+5. **Recomputed downstream numbers (of record):**
+   - **Launch manifest:** per arm 21 original-injected + 10 holdout +
+     12 clean = 43; × 5 arms = **215 cells**.
+   - **Categorical detection clause** (AUTHOR-1(a) universe, all
+     injected cells per the PERMISSION_AUTH ruling): API_SURFACE n=6;
+     SCHEMA_DRIFT n=**3** (a1 only); PERMISSION_AUTH n=6;
+     TOOL_CONTRACT n=**3** (d1 only); RETRIEVAL_INTEGRITY n=3. No
+     category falls under the n<3 descriptive rule; three categories
+     now sit at n=3 where one cell swings 33 points (G13 caveat,
+     reported with the Wilson bounds as ratified).
+   - **Recoverable-class denominator (overall ≥60% recall gate + <40%
+     kill floor):** original recoverable cells 15 → **9** (a1+e404,
+     a1+sd, c1+dc × 3 seeds) + 5 DV + the sealed REPLAN-recoverable
+     fraction r of the 5 RB cells → **14–19 cells** (≥60% ⇒ ≥9 of 14 …
+     ≥12 of 19 detections-with-recovery). Retreat-condition cells:
+     12 original + (5−r) RB. Descriptive note of record: held-out
+     cells now constitute 5–10 of the 14–19 recoverable cells — the
+     recall gate leans more heavily on the structurally-unseen
+     categories; recorded, no gate change.
+   - **Cost projection ($200 matrix envelope, AUTHOR-14):** Phase 1
+     measured $120.05/195 = $0.616/cell → 215 × $0.616 ≈ **$132**
+     naive scaling; v2-arm compile overhead and re-runs land inside
+     the ~$68 headroom. Envelope holds; the AUTHOR-4/14 descope order
+     stands if it binds.
+6. The v2 build remains authorized and unblocked (memo §5 conditions;
+   prereg_1b §5.1); the b1-pair question exits the critical path.

@@ -65,3 +65,14 @@ local copy, which the harness consumes programmatically at launch.
 **Blindness statement:** the drawn values were never printed, logged, or
 displayed during the draw (console output: shape, non-secret basis,
 SHA-256 only — session record); they remain unseen by the author.
+
+## D23 note (2026-06-13)
+
+Per deviation D23 (author ruling on the b1 re-qualification), the six
+b1 original-injected cells (b1+schema_drift × 3 slots, b1+gate_skip_trap
+× 3 slots) exit the Phase 1b matrix. **The sealed file STANDS as drawn
+and transmitted: those six cells' draws go unconsumed; the 1b loader
+skips them; no redraw, no unsealing.** The SHA-256 above remains the
+custody pin for the file as transmitted; the 12 clean-cell seeds
+(including b1's) and the remaining 21 injected cells' values are
+consumed at launch as specified.
