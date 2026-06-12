@@ -327,7 +327,8 @@ class Conductor:
                  max_replans: int = 2,
                  max_escalations: int = MAX_ESCALATIONS,
                  heartbeat_k: Optional[int] = None,
-                 heartbeat_calibration: Optional[dict] = None) -> None:
+                 heartbeat_calibration: Optional[dict] = None,
+                 injection_params: Optional[dict] = None) -> None:
         self.task = yaml.safe_load(Path(task_path).read_text(encoding="utf-8"))
         # production-fidelity context (D6): lean yaml context + the mechanical
         # surface appendix; used for both orchestrator and sentinel compiles
@@ -335,6 +336,10 @@ class Conductor:
         self.system: SystemConfig = SYSTEMS[system_id]
         self.injection_name = injection
         self.n_inject = n_inject
+        # Per-cell escrow overrides (prereg_1b: the loader applies sealed
+        # values programmatically). None -> the task yaml's params verbatim,
+        # byte-identical to every pre-1b run. Never logged.
+        self.injection_params = injection_params
         self.seed = seed
         self.max_replans = max_replans
         self.max_escalations = max_escalations
@@ -398,8 +403,10 @@ class Conductor:
         if self.injection_name:
             entry = next(i for i in self.task["injections"]
                          if i["type"] == self.injection_name)
-            injection_spec = InjectionSpec(type=entry["type"],
-                                           params=entry.get("params", {}))
+            params = dict(entry.get("params", {}))
+            if self.injection_params:
+                params.update(self.injection_params)
+            injection_spec = InjectionSpec(type=entry["type"], params=params)
         config = RunConfig(run_id=self.run_id, seed=self.seed,
                            system=self.system.id, task_id=self.task["id"],
                            n_inject=self.n_inject, injection=injection_spec,
