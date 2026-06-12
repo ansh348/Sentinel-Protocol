@@ -403,7 +403,11 @@ class Conductor:
         config = RunConfig(run_id=self.run_id, seed=self.seed,
                            system=self.system.id, task_id=self.task["id"],
                            n_inject=self.n_inject, injection=injection_spec,
-                           trace_path=str(self.run_dir / "trace_world.jsonl"))
+                           trace_path=str(self.run_dir / "trace_world.jsonl"),
+                           # rev 2 = held-out-category surface; rev 1 (the
+                           # frozen Phase 1 world) is the default so banked
+                           # configs and legacy tasks replay byte-identically
+                           world_rev=int(self.task.get("world_rev", 1)))
         cfg_path = self.run_dir / "world_config.json"
         cfg_path.write_text(config.model_dump_json(), encoding="utf-8")
         log = open(self.run_dir / "world_server.log", "w", encoding="utf-8")

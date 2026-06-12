@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from world.pagination import paginated
 from world.services.auth import require_token
 from world.state import WorldState
 
@@ -33,11 +35,14 @@ def _doc_key(doc: Document) -> str:
 
 
 @router.get("/passages")
-def list_passages(request: Request) -> dict:
+def list_passages(request: Request, page: Optional[int] = None,
+                  page_size: Optional[int] = None) -> dict:
     require_token(request)
     state: WorldState = request.app.state.ctx.state
-    return {"passages": [{"id": p["id"], "title": p["title"]}
-                         for p in state.passages.values()]}
+    full = [{"id": p["id"], "title": p["title"]}
+            for p in state.passages.values()]
+    return paginated(state, "/docs/passages", "passages", full,
+                     page, page_size)
 
 
 @router.get("/passages/{passage_id}")
@@ -53,7 +58,8 @@ def get_passage(passage_id: str, request: Request) -> dict:
 
 
 @router.get("/search")
-def search(q: str, request: Request) -> dict:
+def search(q: str, request: Request, page: Optional[int] = None,
+           page_size: Optional[int] = None) -> dict:
     require_token(request)
     state: WorldState = request.app.state.ctx.state
     needle = q.lower()
@@ -62,7 +68,9 @@ def search(q: str, request: Request) -> dict:
         for p in state.passages.values()
         if needle in p["title"].lower() or needle in p["content"].lower()
     ]
-    return {"query": q, "results": hits}
+    return {"query": q,
+            **paginated(state, "/docs/search", "results", hits,
+                        page, page_size)}
 
 
 @router.post("/validate")

@@ -305,7 +305,11 @@ def night0_jobs(tasks_dir: Path = REPO_ROOT / "tasks") -> list[dict]:
         task = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
         jobs.append({"task": task["id"], "system": "S1", "injection": None,
                      "n_inject": None, "seed": 1})
+        # holdout: true marks Phase 1b held-out-category entries (memo Section
+        # 5(b)); night 0 is Phase 1 machinery and must keep its closed shape.
         for injection in task.get("injections", []):
+            if injection.get("holdout"):
+                continue
             jobs.append({"task": task["id"], "system": "S1",
                          "injection": injection["type"],
                          "n_inject": injection.get("n_inject")

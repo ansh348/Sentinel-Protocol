@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 InjectionType = Literal[
     "endpoint_404", "schema_drift", "token_expiry", "doc_contradiction",
-    "gate_skip_trap",
+    "gate_skip_trap", "quota_cliff", "silent_minor_bump",
 ]
 
 
@@ -38,6 +38,13 @@ class RunConfig(BaseModel):
     n_inject: Optional[int] = None       # counter value at which the injection fires
     injection: Optional[InjectionSpec] = None
     trace_path: str
+    # World revision. Rev 1 is the Phase 1 world, byte-identical forever so
+    # banked world_config.json files keep replaying exactly (the archaeology
+    # battery's foundation). Rev 2 adds the held-out-category surface:
+    # /manifest, X-API-Version, total_count + pagination on list/search
+    # endpoints, and the expanded fixture repo (REPO_FILES_V2). Banked Phase 1
+    # configs lack the field and default to 1.
+    world_rev: int = 1
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +211,69 @@ REPO_FILES: dict[str, str] = {
     "README.md": README_MD,
 }
 
+# ---------------------------------------------------------------------------
+# rev-2 world surface (held-out categories; benchmark/holdouts/*.md)
+
+# The 1.x platform constants. Pre-injection, list/search endpoints serve whole
+# collections (every fixture collection is far below the default page size);
+# the silent_minor_bump injection flips the designated family's version and
+# default page size at the fire counter.
+API_VERSION_BASE = "1.4.0"
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 100
+
+EXPORTS_PY = '''\
+# requires-setting: inventory.endpoint
+"""Exports the inventory rows consumed by the aggregation pipeline."""
+
+
+def export_rows(rows, settings):
+    return [dict(row, source=settings["inventory"]["endpoint"]) for row in rows]
+'''
+
+QUOTES_PY = '''\
+# requires-setting: pricing.source_field
+"""Builds per-SKU quote lines for customer-facing documents."""
+
+
+def quote_lines(rows, settings):
+    field = settings["pricing"]["source_field"]
+    return [f"{row['sku']}: {row[field]}" for row in rows]
+'''
+
+TAX_PY = '''\
+# requires-setting: pricing.source_field
+"""Applies the flat tax schedule to quoted prices."""
+
+TAX_RATE = 0.0825
+
+
+def with_tax(row, settings):
+    field = settings["pricing"]["source_field"]
+    return round(row[field] * (1 + TAX_RATE), 2)
+'''
+
+VALIDATORS_PY = '''\
+# requires-setting: report.format
+"""Pre-publication validators for generated reports."""
+
+
+def validate_format(settings):
+    return settings["report"]["format"] in ("json", "csv")
+'''
+
+# DV-enabling fixture pack (DEPENDENCY_VERSION.md Section 5): 8 files, with
+# pricing-annotated files placed in the page-2 tail of the sorted listing so
+# a truncated default page hides real annotation sites. Rev-1 worlds keep
+# REPO_FILES exactly.
+REPO_FILES_V2: dict[str, str] = {
+    **REPO_FILES,
+    "src/exports.py": EXPORTS_PY,
+    "src/quotes.py": QUOTES_PY,
+    "src/tax.py": TAX_PY,
+    "src/validators.py": VALIDATORS_PY,
+}
+
 
 # ---------------------------------------------------------------------------
 # state container
@@ -247,7 +317,8 @@ class WorldState:
         }
         self.validated_docs: set[str] = set()
 
-        self.repo_files: dict[str, str] = dict(REPO_FILES)
+        self.repo_files: dict[str, str] = dict(
+            REPO_FILES_V2 if config.world_rev >= 2 else REPO_FILES)
 
         # tool-call counter and injection bookkeeping (counter-triggered path)
         self.counter: int = 0
@@ -261,6 +332,16 @@ class WorldState:
         # (POST /auth/token 401s), so workers cannot silently re-auth.
         self.auth_locked: bool = False
         self.trapped_gates: list[str] = []
+        # quota_cliff (RESOURCE_BUDGET): quota_remaining is None until the
+        # injection fires; afterwards every billable call to a quota_family
+        # route decrements it, and at 0 the family 429s for the run remainder.
+        self.quota_family: list[str] = []
+        self.quota_remaining: Optional[int] = None
+        # silent_minor_bump (DEPENDENCY_VERSION): family entries flip version
+        # and default page size; everything else stays at the 1.x constants.
+        self.bump_family: list[str] = []
+        self.bumped_version: Optional[str] = None
+        self.bumped_page_size: Optional[int] = None
         self.admin_injections: list[dict[str, Any]] = []
 
         # hard-stop enforcement (M3 amendment 2): once a worker receives
@@ -291,3 +372,25 @@ class WorldState:
 
     def gate_trapped(self, path: str) -> bool:
         return any(fnmatchcase(path, pat) for pat in self.trapped_gates)
+
+    # -- held-out category surface (rev 2; benchmark/holdouts/*.md) ----------
+
+    @staticmethod
+    def _in_family(path: str, prefixes: list[str]) -> bool:
+        return any(path == p or path.startswith(p + "/") for p in prefixes)
+
+    def quota_metered(self, path: str) -> bool:
+        return (self.quota_remaining is not None
+                and self._in_family(path, self.quota_family))
+
+    def service_version(self, path: str) -> str:
+        if (self.bumped_version is not None
+                and self._in_family(path, self.bump_family)):
+            return self.bumped_version
+        return API_VERSION_BASE
+
+    def default_page_size(self, path: str) -> int:
+        if (self.bumped_page_size is not None
+                and self._in_family(path, self.bump_family)):
+            return self.bumped_page_size
+        return DEFAULT_PAGE_SIZE

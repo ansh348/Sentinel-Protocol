@@ -2,6 +2,10 @@
 # Compile-sufficient spec (Phase 0); checker lands with the B-archetype runs.
 id: b1
 archetype: repo_migration
+# Phase 1b runs on the rev-2 world: the fixture repo carries the 8-file
+# DV-enabling pack (REPO_FILES_V2; see benchmark/holdouts/DEPENDENCY_VERSION.md
+# Section 5). Banked Phase 1 configs default to rev 1 (4 files).
+world_rev: 2
 goal: >
   Migrate the fixture repository's pricing configuration key: rename
   pricing.source_field to pricing.price_source in config/settings.yaml
@@ -37,6 +41,16 @@ injections:
     n_inject: null
   - type: gate_skip_trap
     params: { path: "/repo/validate" }
+    n_inject: null
+  # Held-out categories (benchmark/holdouts/). Param values here are the
+  # qualification defaults; the 1b harness overrides per cell from escrow.
+  - type: quota_cliff
+    holdout: true
+    params: { family: ["/repo"], q0: 10 }
+    n_inject: null
+  - type: silent_minor_bump
+    holdout: true
+    params: { family: ["/repo"], version_to: "2.0.0", page_size_to: 5 }
     n_inject: null
 checker: checkers/b1.py
 task_context: >

@@ -7,10 +7,13 @@ is supported. gate_skip_trap makes it return success without running any of them
 """
 from __future__ import annotations
 
+from typing import Optional
+
 import yaml
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from world.pagination import paginated
 from world.state import WorldState
 
 router = APIRouter(prefix="/repo", tags=["repo"])
@@ -25,9 +28,11 @@ class FileContent(BaseModel):
 
 
 @router.get("/files")
-def list_files(request: Request) -> dict:
+def list_files(request: Request, page: Optional[int] = None,
+               page_size: Optional[int] = None) -> dict:
     state: WorldState = request.app.state.ctx.state
-    return {"files": sorted(state.repo_files)}
+    return paginated(state, "/repo/files", "files", sorted(state.repo_files),
+                     page, page_size)
 
 
 @router.get("/files/{path:path}")

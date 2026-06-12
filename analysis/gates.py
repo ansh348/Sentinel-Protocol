@@ -39,7 +39,11 @@ def generate_manifest(tasks_dir: Path = REPO_ROOT / "tasks") -> list[dict]:
     cells = []
     for yaml_path in sorted(tasks_dir.glob("[abcd][0-9].yaml")):
         task = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
-        variants = [None] + [i["type"] for i in task.get("injections", [])]
+        # holdout: true marks Phase 1b held-out-category entries (memo Section
+        # 5(b)); they are NOT part of the closed Phase 1 planned matrix, whose
+        # committed manifest this generator must keep reproducing exactly.
+        variants = [None] + [i["type"] for i in task.get("injections", [])
+                             if not i.get("holdout")]
         for injection in variants:
             for system in SYSTEMS:
                 for seed in SEEDS:

@@ -34,9 +34,10 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from sentinel.dsl import Tripwire, TripwireSet
 from trace import TraceWriter
-from world.injections import DEPRECATION_BODY, apply_injection
+from world.injections import (DEPRECATION_BODY, QUOTA_EXHAUSTED_BODY,
+                              apply_injection)
 from world.state import InjectionSpec, RunConfig, WorldState
-from world.services import auth, docs, inventory, pricing, repo, shipping
+from world.services import auth, docs, inventory, meta, pricing, repo, shipping
 
 _MISSING = object()
 
@@ -394,6 +395,15 @@ class WorldMiddleware:
                                 body=dict(DEPRECATION_BODY))
             return
 
+        # quota_cliff post-exhaustion: the recurring 429 is answered at the
+        # boundary (endpoint_404 pattern) so the family never executes again
+        # this run. 429s are not billable and never decrement.
+        if state.quota_metered(path) and state.quota_remaining == 0:
+            await self._respond(scope, receive, send, n, method, path, query,
+                                worker_id, request_body=None, status=429,
+                                body=dict(QUOTA_EXHAUSTED_BODY))
+            return
+
         req_chunks: list[bytes] = []
 
         async def receive_teed() -> dict:
@@ -429,6 +439,21 @@ class WorldMiddleware:
                        method: str, path: str, query: str, worker_id: str, *,
                        request_body: Any, status: int, body: Any) -> None:
         ctx = self.ctx
+        state = ctx.state
+
+        # Held-out-category surface (rev 2; benchmark/holdouts/*.md), applied
+        # BEFORE matching and tracing so the matcher and the trace both see
+        # exactly what the worker sees.
+        extra_headers: dict[str, str] = {}
+        if state.config.world_rev >= 2:
+            extra_headers["X-API-Version"] = state.service_version(path)
+        if state.quota_metered(path):
+            if status < 400:  # billable call: 4xx/5xx (incl. the 429s) never bill
+                state.quota_remaining = max(0, state.quota_remaining - 1)
+            extra_headers["X-Quota-Remaining"] = str(state.quota_remaining)
+            if isinstance(body, dict):
+                body = {**body, "quota_remaining": state.quota_remaining}
+
         ctx.trace.emit(
             actor=worker_id,
             event_type="tool_call",
@@ -490,12 +515,14 @@ class WorldMiddleware:
 
         if isinstance(body, str):
             response = Response(content=body, status_code=status,
-                                media_type="text/plain")
+                                media_type="text/plain",
+                                headers=extra_headers or None)
         else:
             response = Response(
                 content=json.dumps(body, separators=(",", ":"),
                                    ensure_ascii=False),
-                status_code=status, media_type="application/json")
+                status_code=status, media_type="application/json",
+                headers=extra_headers or None)
         await response(scope, receive, send)
 
 
@@ -514,6 +541,10 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
 
     for service in (auth, inventory, pricing, shipping, docs, repo):
         app.include_router(service.router)
+    if config.world_rev >= 2:
+        # rev-2-only surface: keeps rev-1 OpenAPI, D13 path samples, and
+        # banked-trace replays byte-identical (benchmark/holdouts/*.md)
+        app.include_router(meta.router)
 
     @app.get("/health")
     def health() -> dict:
@@ -599,6 +630,11 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
             "pricing_drift": state.pricing_drift,
             "active_tokens": len(state.active_tokens),
             "revoked_tokens": len(state.revoked_tokens),
+            "quota_family": sorted(state.quota_family),
+            "quota_remaining": state.quota_remaining,
+            "bump_family": sorted(state.bump_family),
+            "bumped_version": state.bumped_version,
+            "bumped_page_size": state.bumped_page_size,
             "armed_tripwires": [t.id for t in ctx.matcher.tripwires],
             "suppressed_tripwires": sorted(ctx.matcher.suppressed),
             "cooldowns": sorted(ctx.matcher.cooldowns),

@@ -2,6 +2,9 @@
 # Compile-sufficient spec (Phase 0); checker lands with the C-archetype runs.
 id: c1
 archetype: research_synthesis
+# Phase 1b runs on the rev-2 world (held-out-category surface; see
+# benchmark/holdouts/). Banked Phase 1 configs default to rev 1.
+world_rev: 2
 goal: >
   Produce a policy brief for the operations team answering three questions
   from the document store: (1) what are the customer returns terms, (2) which
@@ -38,6 +41,16 @@ injections:
     n_inject: null
   - type: token_expiry
     params: {}
+    n_inject: null
+  # Held-out categories (benchmark/holdouts/). Param values here are the
+  # qualification defaults; the 1b harness overrides per cell from escrow.
+  - type: quota_cliff
+    holdout: true
+    params: { family: ["/docs"], q0: 10 }
+    n_inject: null
+  - type: silent_minor_bump
+    holdout: true
+    params: { family: ["/docs"], version_to: "2.0.0", page_size_to: 4 }
     n_inject: null
 checker: checkers/c1.py
 task_context: >

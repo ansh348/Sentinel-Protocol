@@ -4,6 +4,10 @@
 # until then.
 id: a1
 archetype: api_aggregation
+# Phase 1b runs on the rev-2 world (held-out-category surface; see
+# benchmark/holdouts/). Banked Phase 1 world_config.json files default to
+# rev 1 and replay byte-identically.
+world_rev: 2
 goal: >
   Produce a consolidated price-and-availability report for all six catalog
   SKUs as one JSON object keyed by SKU id. Each value must be an object with
@@ -42,6 +46,18 @@ injections:
     n_inject: null
   - type: token_expiry
     params: {}
+    n_inject: null
+  # Held-out categories (benchmark/holdouts/). Param values here are the
+  # qualification defaults; the 1b harness overrides q0 / version_to /
+  # page_size_to / n_inject per cell from the escrow file.
+  - type: quota_cliff
+    holdout: true
+    params: { family: ["/inventory", "/pricing", "/shipping"], q0: 8 }
+    n_inject: null
+  - type: silent_minor_bump
+    holdout: true
+    params: { family: ["/inventory", "/pricing", "/shipping"],
+              version_to: "2.0.0", page_size_to: 4 }
     n_inject: null
 checker: checkers/a1.py
 task_context: >

@@ -2,6 +2,9 @@
 # Compile-sufficient spec (Phase 0); checker lands with the D-archetype runs.
 id: d1
 archetype: document_pipeline
+# Phase 1b runs on the rev-2 world (held-out-category surface; see
+# benchmark/holdouts/). Banked Phase 1 configs default to rev 1.
+world_rev: 2
 goal: >
   Generate, validate, and package a product-catalog document through the
   required gate. The document must have a title, a body of at least 200
@@ -39,6 +42,17 @@ injections:
     n_inject: null
   - type: endpoint_404
     params: { path: "/docs/package" }
+    n_inject: null
+  # Held-out categories (benchmark/holdouts/). Param values here are the
+  # qualification defaults; the 1b harness overrides per cell from escrow.
+  - type: quota_cliff
+    holdout: true
+    params: { family: ["/docs", "/inventory"], q0: 10 }
+    n_inject: null
+  - type: silent_minor_bump
+    holdout: true
+    params: { family: ["/docs", "/inventory"],
+              version_to: "2.0.0", page_size_to: 4 }
     n_inject: null
 checker: checkers/d1.py
 task_context: >
