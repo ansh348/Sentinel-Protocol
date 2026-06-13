@@ -666,6 +666,13 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
         # rev-2-only surface: keeps rev-1 OpenAPI, D13 path samples, and
         # banked-trace replays byte-identical (benchmark/holdouts/*.md)
         app.include_router(meta.router)
+    if config.probe_channel:
+        # v2 §4 gate-shadow surface (read-only enforcement re-read; build B5).
+        # Registered ONLY on probe-channel worlds, so banked/Phase-1 OpenAPI,
+        # D13 path samples, and replays stay byte-identical (probe_channel
+        # defaults off, and every sample-derivation builds the app with it off).
+        from world.services import gate_shadow
+        app.include_router(gate_shadow.router)
 
     @app.get("/health")
     def health() -> dict:

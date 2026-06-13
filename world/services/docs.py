@@ -77,16 +77,12 @@ def search(q: str, request: Request, page: Optional[int] = None,
                         page, page_size, limit, page_limit)}
 
 
-@router.post("/validate")
-def validate_document(doc: Document, request: Request) -> dict:
-    require_token(request)
-    state: WorldState = request.app.state.ctx.state
-    key = _doc_key(doc)
+def doc_enforcement(state: WorldState, doc: Document) -> dict:
+    """The REAL doc-gate enforcement predicate, NO WRITE. Shared by the POST gate
+    and the v2 §4 shadow (run against a canary), so probe and predicate can never
+    disagree. gate_skip_trap admits without running any check (the trap)."""
     if state.gate_trapped(GATE_PATH):
-        # The trap: success without running checks, and the (possibly invalid)
-        # document is admitted to packaging anyway.
-        state.validated_docs.add(key)
-        return {"status": "passed", "checks_run": 0, "checks": []}
+        return {"enforcing": False, "admitted": True, "checks_run": 0, "checks": []}
     checks = [
         {"name": "title_present", "passed": bool(doc.title.strip())},
         {"name": "body_min_length", "passed": len(doc.body) >= 50},
@@ -95,10 +91,38 @@ def validate_document(doc: Document, request: Request) -> dict:
          "passed": all(c in state.passages for c in doc.citations)},
     ]
     passed = all(c["passed"] for c in checks)
-    if passed:
+    return {"enforcing": True, "admitted": passed, "checks_run": len(checks),
+            "checks": checks}
+
+
+# A deliberately-invalid canary for the §4 shadow: every check fails (empty
+# title, sub-minimum body, an unresolvable citation), so an ENFORCING gate
+# rejects it and a TRAPPED gate admits it — the behavioral enforcement witness.
+_SHADOW_CANARY = Document(title="", body="x", citations=["__no_such_passage__"])
+
+
+def gate_shadow_status(state: WorldState) -> dict:
+    """v2 §4 shadow: run the real predicate against the canary, NO WRITE.
+    BEHAVIORAL — enforcing iff the gate actually ran its checks AND rejected the
+    known-bad canary (a trap admits it); never a gate_enabled flag read."""
+    verdict = doc_enforcement(state, _SHADOW_CANARY)
+    enforcing = verdict["checks_run"] > 0 and verdict["admitted"] is False
+    return {"gate": GATE_PATH, "enforcing": enforcing,
+            "checks_run": verdict["checks_run"],
+            "canary_admitted": verdict["admitted"]}
+
+
+@router.post("/validate")
+def validate_document(doc: Document, request: Request) -> dict:
+    require_token(request)
+    state: WorldState = request.app.state.ctx.state
+    key = _doc_key(doc)
+    verdict = doc_enforcement(state, doc)
+    if verdict["admitted"]:
+        # the only write: a trapped gate still admits (the trap), unchanged
         state.validated_docs.add(key)
-    return {"status": "passed" if passed else "failed",
-            "checks_run": len(checks), "checks": checks}
+    return {"status": "passed" if verdict["admitted"] else "failed",
+            "checks_run": verdict["checks_run"], "checks": verdict["checks"]}
 
 
 @router.post("/package")

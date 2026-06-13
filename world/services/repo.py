@@ -93,12 +93,28 @@ def _run_checks(state: WorldState) -> list[dict]:
     return checks
 
 
-@router.post("/validate")
-def validate_repo(request: Request) -> dict:
-    state: WorldState = request.app.state.ctx.state
+def _validate_decision(state: WorldState) -> dict:
+    """The REAL repo-gate enforcement predicate, no-write. Shared verbatim by the
+    POST gate and the v2 §4 read-only shadow, so probe and predicate can never
+    disagree. gate_skip_trap short-circuits without running any check."""
     if state.gate_trapped(GATE_PATH):
         return {"status": "passed", "checks_run": 0, "checks": []}
     checks = _run_checks(state)
     passed = all(c["passed"] for c in checks)
     return {"status": "passed" if passed else "failed",
             "checks_run": len(checks), "checks": checks}
+
+
+def enforcement_status(state: WorldState) -> dict:
+    """v2 §4 shadow: 'would the gate enforce now?' BEHAVIORAL — enforcing iff the
+    real predicate actually ran its checks (the trap short-circuits to
+    checks_run=0); never a gate_enabled flag read (a status surrogate). No-write."""
+    d = _validate_decision(state)
+    return {"gate": GATE_PATH, "enforcing": d["checks_run"] > 0,
+            "checks_run": d["checks_run"], "would_pass": d["status"] == "passed"}
+
+
+@router.post("/validate")
+def validate_repo(request: Request) -> dict:
+    state: WorldState = request.app.state.ctx.state
+    return _validate_decision(state)
