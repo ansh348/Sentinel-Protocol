@@ -138,3 +138,118 @@ def schema_fingerprint(payload: Any) -> tuple[str, ...]:
 
     visit(payload, "")
     return tuple(sorted(pairs))
+
+
+# -- order-sensitive and relational/join reads (B1; design v0.4 §1.1/§2.1) -----
+#
+# Two GENERIC lenses (Rule Zero: ontology-general, no category) that the
+# value-blind schema fingerprint and the single-surface value read cannot
+# express:
+#   * ORDER/SEQUENCE — schema_fingerprint is a SORTED SET, so a reorder of a
+#     load-bearing array is invisible to it; ordered_subarray / ordered_digest
+#     are order-sensitive by construction. (The position-pinned read is the
+#     other order flavor and is already expressible as read_field on an indexed
+#     pointer, e.g. read_field(r, "/results/0/sku").)
+#   * RELATIONAL/JOIN — a relation that holds ACROSS surfaces (referential
+#     coverage / foreign-key / set equality). It has no single-surface clean
+#     baseline, so the typing engine treats RELATION_BROKEN as fire-on-its-own,
+#     exempt from transition-typing (design v0.4 §2.1).
+#
+# All four accept either a ProbeResult or an already-parsed body, so the lenses
+# work on live probe observations and on pure synthetic fixtures alike.
+
+
+def _body_of(observation: Any) -> Any:
+    return observation.body if isinstance(observation, ProbeResult) else observation
+
+
+def _canonical(value: Any) -> Any:
+    """Hashable, order-faithful rendering: containers canonicalize to
+    sorted-key JSON (element equality is value-based); scalars pass through."""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=False)
+    return value
+
+
+def _array_at(observation: Any, pointer: str) -> list:
+    arr = _pointer_lookup(_body_of(observation), pointer)
+    if arr is _MISSING or not isinstance(arr, list):
+        raise KeyError(f"pointer {pointer!r} does not resolve to a list")
+    return arr
+
+
+def _project(arr: list, pointer: str, field: Optional[str]):
+    if field is None:
+        for item in arr:
+            yield _canonical(item)
+        return
+    for i, item in enumerate(arr):
+        value = _pointer_lookup(item, field)
+        if value is _MISSING:
+            raise KeyError(f"field {field!r} unresolvable in element {i} "
+                           f"of {pointer!r}")
+        yield _canonical(value)
+
+
+def ordered_subarray(observation: Any, pointer: str, *,
+                     field: Optional[str] = None) -> tuple:
+    """The ORDERED sequence of the array at `pointer` (optionally projecting
+    each element to `field`, in the pointer dialect). Order-SENSITIVE: a reorder
+    changes the result, unlike schema_fingerprint (a value-blind sorted set).
+    Raises KeyError if the pointer is not a list or `field` is unresolvable in
+    an element (a shape problem, surfaced loudly, not silently dropped)."""
+    arr = _array_at(observation, pointer)
+    return tuple(_project(arr, pointer, field))
+
+
+def ordered_digest(observation: Any, pointer: str, *,
+                   field: Optional[str] = None) -> str:
+    """SHA-256 of the ordered sub-array (the 'sub-array hash' order lens):
+    a compact, deterministic, order-sensitive comparable for ORDER_CHANGED."""
+    seq = ordered_subarray(observation, pointer, field=field)
+    raw = json.dumps(list(seq), separators=(",", ":"),
+                     ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def project_keys(observation: Any, pointer: str, *,
+                 field: Optional[str] = None) -> frozenset:
+    """The SET of values at array `pointer` (optionally projected to `field`).
+    Set semantics — the building block for cross-surface coverage relations
+    (use ordered_subarray when ORDER, not membership, is load-bearing)."""
+    arr = _array_at(observation, pointer)
+    return frozenset(_project(arr, pointer, field))
+
+
+@dataclass(frozen=True)
+class JoinResult:
+    """Outcome of a cross-surface relation check. `holds` is the verdict;
+    `left_only`/`right_only` are the witnessing keys (RELATION_BROKEN evidence)."""
+    relation: str
+    holds: bool
+    left_only: tuple
+    right_only: tuple
+
+
+def relation_holds(left: Any, left_pointer: str, right: Any, right_pointer: str,
+                   *, left_field: Optional[str] = None,
+                   right_field: Optional[str] = None,
+                   relation: str = "subset") -> JoinResult:
+    """Evaluate a GENERIC relation ACROSS two surfaces (the RELATION_BROKEN
+    lens). relation='subset': referential coverage — every key on the left must
+    resolve on the right (foreign-key / coverage). relation='equal': the two
+    key sets must match (bijective coverage). No single-surface baseline is
+    involved; the verdict is the relation predicate evaluated directly."""
+    left_keys = project_keys(left, left_pointer, field=left_field)
+    right_keys = project_keys(right, right_pointer, field=right_field)
+    left_only = tuple(sorted(left_keys - right_keys, key=repr))
+    right_only = tuple(sorted(right_keys - left_keys, key=repr))
+    if relation == "subset":
+        holds = not left_only
+    elif relation == "equal":
+        holds = not left_only and not right_only
+    else:
+        raise ValueError(f"unknown relation {relation!r} (subset|equal)")
+    return JoinResult(relation=relation, holds=holds,
+                      left_only=left_only, right_only=right_only)
