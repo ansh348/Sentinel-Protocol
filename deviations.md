@@ -945,3 +945,53 @@ A pre-committed real-suite probe-failure policy covering, at minimum:
 is a pre-registered obligation, not a post-hoc choice made once 1c data exists.
 The deterministic mock has no transport weather, so nothing in this session
 exercises the policy — it becomes load-bearing only in the real-suite study.
+
+---
+
+## D27 — Compile-prompt few-shot example-selection rule (frozen; custody sibling to D25)
+
+**Date:** 2026-06-14 (v2 compile-prompt build window; committed BEFORE any prompt
+tuning or any compile call). **Affects:** the v2 compile prompt's few-shot grounding
+set (`prompts/v2_compile_fewshot.json`). Custody discipline (sibling to D25's
+inventory-audit quarantine): the few-shot set is chosen by a FIXED rule frozen here,
+not hand-curated against prompt outputs, so it cannot be cherry-picked to inflate
+extraction recall.
+
+### The frozen rule
+
+The few-shot set contains **exactly six worked examples, one per general change-shape**
+(the substrate's FaultShape enum order: vanished / status-moved / structure-changed /
+value-moved / order-scrambled / relationship-broke). Each example is selected by this
+criterion, committed before tuning:
+
+1. **One per shape** — every general change-shape appears exactly once.
+2. **Seen-category surfaces only** — every example is built on a surface from the five
+   SEEN categories (auth, inventory, pricing, shipping, docs, repo). No example
+   references any mechanism outside the five seen injection types (endpoint_404,
+   schema_drift, token_expiry, doc_contradiction, gate_skip_trap). The held-out two
+   (RESOURCE_BUDGET/quota_cliff, DEPENDENCY_VERSION/silent_minor_bump) never appear.
+3. **Span the seen categories** — the six examples collectively touch ≥5 distinct seen
+   surfaces, so the set teaches shape-extraction across categories, not on one surface.
+4. **Natural instantiation** — each shape is bound to the surface that most directly
+   hosts it, per the FROZEN binding table below; the table is the deterministic
+   projection of (1)–(3) onto the seen world and is fixed here.
+
+### Frozen binding table (shape → seen surface / seen task-step)
+
+| change-shape | seen surface | seen task-step | the trusted world-fact |
+|---|---|---|---|
+| vanished (FIELD_ABSENT) | /inventory/items/{sku} | a1 s2 | the `quantity` field is present |
+| status-moved (STATUS_CLASS) | /auth/validate | a1 s1 | the bearer token still validates (200) |
+| structure-changed (SCHEMA_SHAPE) | /pricing/quote/{sku} | a1 s3 | the `{sku,unit_price,currency}` shape holds |
+| value-moved (VALUE_CHANGED) | /docs/passages/{id} (/content) | c1 s1 | the passage `content` is unchanged since retrieval |
+| order-scrambled (ORDER_CHANGED) | /repo/files | b1 s1 | the file listing is complete and stably ordered |
+| relationship-broke (RELATION_BROKEN) | /inventory/items × /pricing/quote/{sku} | a1 s5 | every listed SKU resolves to a pricing quote |
+
+Surfaces span auth (PERMISSION_AUTH), inventory + pricing (API_SURFACE / SCHEMA_DRIFT),
+docs (RETRIEVAL_INTEGRITY), repo (TOOL_CONTRACT), plus the cross-surface relation — all
+five seen categories. The set is FROZEN at these six; `prompts/v2_compile_fewshot.json`
+is its serialization and `tests/test_v2_fewshot.py` asserts seen-only (no held-out
+token anywhere) and one-example-per-shape.
+
+**Custody note:** committed before the prompt (C2) is written or tuned and before any
+compile call is made, so the examples are fixed independent of measured recall.

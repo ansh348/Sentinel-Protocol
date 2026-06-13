@@ -383,12 +383,65 @@ timing constraints* — not "active monitoring solves observation."
 
 ---
 
-## 9. Compile prompt (D4) — deferred (HARD STOP this session)
+## 9. Compile prompt (D4) — design of record (built 2026-06-14)
 
-Unblocked once §§1–6 are accepted; it encodes them (lens selection; the two comparison
-paths, five baseline obligations, and the §2.1 typing rule; the §3.1 attachment predicate;
-the provenance + read-and-trust gate; the §6 keep/recompile-add behavior) and nothing more.
-Written last, with the author present.
+The single LLM step that feeds the substrate. **Author-ratified design of record:**
+
+- **Soft extraction over the substrate's hard constraints.** The prompt's only output is
+  a list of ASSUMPTIONS — each `{plan-step ref, the world-fact that step needs, the real
+  surface where that fact lives, optional recovery hint}`. It emits **no probes, no lens
+  choices, no firing decisions**; the substrate (B1–B7) compiles all of it.
+- **Generous extraction.** The prompt surfaces everything the plan plausibly leans on and
+  is NOT asked to be careful; precision is the substrate's job (the provenance gate, the
+  appendix grounding, the attachment policy, and the 12% budget are the filters). Tune for
+  **recall of dependencies**.
+- **Category-blind (Rule Zero).** No failure-category list enters the prompt. It reasons in
+  two general things only: the dependency-noticing instinct ("what does this step trust
+  about the world") and the six general change-shapes already in the substrate
+  (**vanished / status-moved / structure-changed / value-moved / order-scrambled /
+  relationship-broke**). Category labels are applied only at analysis time, escrow-side for
+  the held-out two. The prompt is tuned and validated ONLY on the five seen categories;
+  generalization to the held-out two is measured ONLY at matrix launch.
+- **Few-shot from seen.** Grounded with worked examples drawn ONLY from the five seen
+  categories — concrete instances of "a step trusted X, X changed, this is the shape it
+  took." The held-out two never appear as examples, in the prompt, or in any test world.
+- **Frozen example-selection rule (custody; deviations D27, sibling to D25).** The few-shot
+  set is chosen by a fixed rule committed BEFORE any prompt tuning (cover all six change-
+  shapes on seen-category surfaces by a stated criterion) and then frozen — NOT hand-curated.
+
+### 9.1 Operationalization (build note, FLAGGED FOR AUTHOR)
+
+The design-of-record output is the four soft fields. The build adds ONE optional field,
+`pointer` — "the real surface where that fact lives" at field granularity (a fact often
+lives in a specific field of a surface). The emitted assumption therefore is
+`{plan_step, world_fact, surface, pointer?, recovery_hint?}` and carries **no shape, lens,
+comparison, attach/passive decision, evidence-class, cadence, or method** — those remain
+the substrate's. The deterministic bridge maps the surface's STRUCTURE to a substrate kind:
+
+- surface is a known enforcement **gate** (`/repo/validate`, `/docs/validate`) → `GATE`
+  (the §4 shadow route + non-perturbation trapdoor, ruling D1);
+- a `pointer` is given (the fact lives in a specific field) → `VALUE` (FIELD_READ drift);
+- a bare surface → `STRUCTURE` (SCHEMA_FINGERPRINT drift).
+
+This covers the five seen categories as interrupting probes (endpoint-removal and
+auth-revocation change the body's `{key:type}` shape → STRUCTURE; a field rename →
+STRUCTURE; a value swap on a stable shape → VALUE via the pointer; a gate that stops
+enforcing → GATE). The full six-shape vocabulary (incl. ORDER/RELATION/STATUS/PRESENCE/
+WHOLE_PAYLOAD) remains available in the substrate; the soft prompt exercises the
+gate/value/structure subset, with richer extraction (ORDER/RELATION) a later refinement.
+The prompt still REASONS about all six shapes (step iii) to decide *what* is a real,
+watchable dependency — it just does not emit the shape. **Open for author:** whether to
+have the prompt also emit the change-shape explicitly (it would let the substrate pick
+STATUS/ORDER/RELATION directly); deferred as it edges toward a lens-ish choice.
+
+### 9.2 Internal structure (one bounded call)
+
+(i) identify the surfaces the plan touches from the plan + the rev-aware surface appendix
+(B7); (ii) pull the contract/schema-grounded assumptions mechanically; (iii) the judgment
+pass, per plan step — "what does it trust, and which of the six shapes would break that
+trust"; (iv) bind each assumption to a real appendix surface + the provenance chain + a
+recovery hint. One bounded compile call per run, and per replan (keep-not-flush, ruling
+D2); the compile cost is booked into the economics against the 12% (§0).
 
 ---
 
