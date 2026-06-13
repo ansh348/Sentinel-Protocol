@@ -1,0 +1,66 @@
+{
+  "_provenance": "FROZEN per deviations.md D27 (committed before any prompt tuning). One worked example per general change-shape, drawn ONLY from the five SEEN categories' surfaces, spanning auth/inventory/pricing/docs/repo + a cross-surface relation. No held-out mechanism appears. Each example teaches the shape-REASONING; the model emits only the `assumption` object (the soft compile output).",
+  "examples": [
+    {
+      "change_shape": "vanished",
+      "reasoning": "Step s2 reads the inventory item and records its quantity, so it TRUSTS the quantity field is present. The way that trust breaks is the field VANISHING — a present, load-bearing field becomes absent. That is a real, watchable dependency, so emit it. A vanished field also changes the surface's shape, so watching the surface covers it; no field pointer is needed for a presence dependency.",
+      "assumption": {
+        "plan_step": "s2",
+        "world_fact": "GET /inventory/items/{sku} returns a quantity field for every SKU",
+        "surface": "/inventory/items/WID-001",
+        "recovery_hint": "replan inventory: re-fetch quantities from a working inventory surface and redispatch s2"
+      }
+    },
+    {
+      "change_shape": "status-moved",
+      "reasoning": "Step s1 obtains a bearer token and every later step trusts it keeps validating (a 200 on an auth check). The way that trust breaks is the STATUS MOVING out of its class — the auth check starts answering 401 instead of 200. Watch the auth surface; the status rides its ordinary shape, so no field pointer is needed.",
+      "assumption": {
+        "plan_step": "s1",
+        "world_fact": "the bearer token from POST /auth/token continues to validate (GET /auth/validate returns 200)",
+        "surface": "/auth/validate",
+        "recovery_hint": "replan auth: re-establish credentials before continuing; do not silently retry"
+      }
+    },
+    {
+      "change_shape": "structure-changed",
+      "reasoning": "Step s3 consumes the pricing quote's shape: it reads unit_price from a {sku, unit_price, currency} object. The way that trust breaks is the STRUCTURE CHANGING — a field renamed or retyped, so the consumer's field path no longer resolves. Watch the surface's shape; do not pin a single value, since the break is structural.",
+      "assumption": {
+        "plan_step": "s3",
+        "world_fact": "GET /pricing/quote/{sku} returns the {sku, unit_price, currency} shape with unit_price in US dollars",
+        "surface": "/pricing/quote/WID-001",
+        "recovery_hint": "replan pricing: re-map the renamed field or route to a supported pricing surface"
+      }
+    },
+    {
+      "change_shape": "value-moved",
+      "reasoning": "Step s1 retrieves a passage and synthesizes from its content, trusting the content is the same at synthesis time as at retrieval. The way that trust breaks is the VALUE MOVING while the shape stays identical — the content string is swapped for a different one. The shape alone cannot see this, so name the field where the value lives (a pointer) so the substrate can watch that value.",
+      "assumption": {
+        "plan_step": "s1",
+        "world_fact": "the content of passage pol-returns is unchanged between retrieval and synthesis",
+        "surface": "/docs/passages/pol-returns",
+        "pointer": "/content",
+        "recovery_hint": "replan retrieval: re-fetch the passage and re-ground the affected section"
+      }
+    },
+    {
+      "change_shape": "order-scrambled",
+      "reasoning": "Step s1 enumerates the repository files so no annotation site is missed, trusting the listing is complete and stably ordered. The way that trust breaks is the SEQUENCE SCRAMBLING — a site dropped from the listing or the order shifting so the worker skips one. Watch the listing surface; completeness and ordering live in its shape.",
+      "assumption": {
+        "plan_step": "s1",
+        "world_fact": "GET /repo/files enumerates the complete, stably ordered file set so no annotation site is missed",
+        "surface": "/repo/files",
+        "recovery_hint": "replan migration: re-enumerate the file set and cover any missed annotation site"
+      }
+    },
+    {
+      "change_shape": "relationship-broke",
+      "reasoning": "The aggregation step trusts a relation that spans two surfaces: every SKU listed by inventory resolves to a pricing quote. The way that trust breaks is the RELATIONSHIP BREAKING — a listed SKU loses its quote, while each surface looks individually fine. Emit the dependency on the inventory listing; the relation it must satisfy is named in the fact.",
+      "assumption": {
+        "plan_step": "s5",
+        "world_fact": "every SKU listed by GET /inventory/items resolves to a GET /pricing/quote/{sku}",
+        "surface": "/inventory/items",
+        "recovery_hint": "replan aggregation: reconcile the SKU set against pricing and re-fetch any unpriced SKU"
+      }
+    }
+  ]
+}
