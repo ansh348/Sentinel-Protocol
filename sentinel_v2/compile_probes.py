@@ -22,6 +22,7 @@ only; no held-out category appears anywhere here.
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import Optional
@@ -243,3 +244,56 @@ def compile_pipeline(soft_set: SoftAssumptionSet, *, world_rev: int = 1,
     return CompileResult(plan_id=soft_set.plan_id, probes=probes,
                          telemetry_only=telemetry, passive=passive,
                          uncovered=uncovered, soft_assumptions=soft_set)
+
+
+# -- C4: compile-output recording + byte-identical replay ----------------------
+#
+# The compile call is the one non-deterministic step. To keep a run byte-
+# replayable, the SOFT ASSUMPTIONS (the LLM output) are recorded in the trace;
+# replay reads them and re-runs the DETERMINISTIC compile_pipeline — no LLM call.
+# The probe summary is recorded too, so replay can be checked against it.
+
+def probe_to_dict(probe: Probe) -> dict:
+    """A stable, JSON-serializable view of a compiled probe (str-enums serialize
+    as their string values natively), for recording and byte-comparison."""
+    return dataclasses.asdict(probe)
+
+
+def compile_result_summary(cr: CompileResult) -> dict:
+    return {"plan_id": cr.plan_id,
+            "probes": [probe_to_dict(p) for p in cr.probes],
+            "telemetry_only": cr.telemetry_only,
+            "passive": cr.passive, "uncovered": cr.uncovered}
+
+
+def record_compile(trace: TraceWriter, cr: CompileResult, *, cost_usd: float = 0.0
+                   ) -> dict:
+    """Write the compiled set into the run trace as a `tripwire_set` event. The
+    recorded soft assumptions are sufficient to reconstruct the probes on replay."""
+    payload = {"layer": "v2_probes",
+               "soft_assumptions": cr.soft_assumptions.model_dump(),
+               "cost_usd": cost_usd, **compile_result_summary(cr)}
+    trace.emit(actor="sentinel_v2", event_type="tripwire_set", payload=payload)
+    return payload
+
+
+def read_recorded_soft_set(events: list) -> Optional[SoftAssumptionSet]:
+    """Recover the recorded SoftAssumptionSet from a trace (the last v2_probes
+    tripwire_set event — keep-not-flush replans append later sets)."""
+    recorded = [e for e in events if e["event_type"] == "tripwire_set"
+                and (e.get("payload") or {}).get("layer") == "v2_probes"]
+    if not recorded:
+        return None
+    return SoftAssumptionSet.model_validate(recorded[-1]["payload"]["soft_assumptions"])
+
+
+def replay_compile(events: list, *, world_rev: int = 1, world=None,
+                   auth_token: Optional[str] = None,
+                   planned_write_set=()) -> Optional[CompileResult]:
+    """Reconstruct the compiled set from the recorded trace WITHOUT an LLM call:
+    read the recorded soft assumptions and re-run the deterministic pipeline."""
+    soft = read_recorded_soft_set(events)
+    if soft is None:
+        return None
+    return compile_pipeline(soft, world_rev=world_rev, world=world,
+                            auth_token=auth_token, planned_write_set=planned_write_set)
