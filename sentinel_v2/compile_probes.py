@@ -297,3 +297,54 @@ def replay_compile(events: list, *, world_rev: int = 1, world=None,
         return None
     return compile_pipeline(soft, world_rev=world_rev, world=world,
                             auth_token=auth_token, planned_write_set=planned_write_set)
+
+
+# -- C5: cost discipline -------------------------------------------------------
+#
+# One bounded compile call per run, and one per replan (keep-not-flush, ruling
+# D2). Compile cost is booked as OVERHEAD against the clean-run ≤12% cap (design
+# §0; the replan recompile is booked on the run it occurs on, A5). The
+# deterministic mock's probe traffic is effectively free (side-channel reads);
+# probe_cost becomes load-bearing only in the real-suite study.
+
+CLEAN_OVERHEAD_CAP = 0.12
+
+
+@dataclass
+class CompileEconomics:
+    n_compiles: int            # bounded compile calls = 1 (run) + n_replans
+    n_attempts: int            # total LLM attempts across all compiles (incl. retries)
+    compile_cost_usd: float    # LLM cost of every compile + recompile
+    probe_cost_usd: float = 0.0   # probe traffic booked as waste (mock ≈ 0)
+    worker_cost_usd: float = 0.0  # the run's productive (worker) cost
+
+    @property
+    def overhead_usd(self) -> float:
+        return self.compile_cost_usd + self.probe_cost_usd
+
+    @property
+    def overhead_fraction(self) -> float:
+        return (self.overhead_usd / self.worker_cost_usd
+                if self.worker_cost_usd > 0 else float("inf"))
+
+    def within_clean_cap(self, cap: float = CLEAN_OVERHEAD_CAP) -> bool:
+        return self.overhead_fraction <= cap
+
+    @property
+    def bounded(self) -> bool:
+        """Every compile used at most one retry (no unbounded compile loop)."""
+        return self.n_attempts <= self.n_compiles * MAX_ATTEMPTS
+
+
+def account_compile(compile_runs: list, *, worker_cost_usd: float = 0.0,
+                    probe_cost_usd: float = 0.0) -> CompileEconomics:
+    """`compile_runs` is one list of SessionResults per compile call: the run
+    compile first, then one per replan (keep-not-flush). Books all compile cost
+    as overhead."""
+    n_compiles = len(compile_runs)
+    n_attempts = sum(len(r) for r in compile_runs)
+    compile_cost = sum(s.cost_usd for r in compile_runs for s in r)
+    return CompileEconomics(n_compiles=n_compiles, n_attempts=n_attempts,
+                            compile_cost_usd=round(compile_cost, 6),
+                            probe_cost_usd=probe_cost_usd,
+                            worker_cost_usd=worker_cost_usd)
