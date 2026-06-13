@@ -884,3 +884,64 @@ regression record).
 classifier, matcher, and all banked replays are untouched (default
 parameter path is byte-identical); the sweep gates only v2 compilation,
 which does not exist yet — no measured quantity changes anywhere.
+
+---
+
+## D25 — Probe-inventory audit: held-out-denominator quarantine (GATE-Δ)
+
+**Date:** 2026-06-14 (v2 probe-compiler build window; pre-data — decided before
+any v2 measured quantity exists, blind to effect direction on v2's recall).
+**Affects:** the v2 probe-inventory audit (probe_compiler_design §7). This is a
+pre-data **gate strengthening**; it AMENDS the frozen prereg_1b.md (6c8cc47) via
+its §7 deviation mechanism — the frozen blob is not edited; this record governs.
+A **numbered deviation, not a silent edit**, per the GATE-Δ discipline.
+
+### Ruling
+
+1. The probe-inventory audit's denominator is the **true load-bearing assumption
+   set** (task ground truth, the 4–8 per task), NOT the assumptions the compiler
+   mapped. A compiler that silently fails to emit a probe therefore shows up as a
+   **coverage hole**, never a clean 100%.
+2. **Quarantine:** that held-out denominator is computed **escrow-side**, reported
+   as an **aggregate only**, and **never fed back into compiler iteration**. It is
+   a measurement, not a tuning signal — feeding it back would let the compiler
+   overfit the very set the audit exists to hold out.
+3. **"Load-bearing" is defined compiler-independently** (perturb-and-replay: an
+   assumption is load-bearing iff perturbing the world fact it names changes the
+   task outcome on replay), so the denominator does not inherit the compiler's
+   own blind spots.
+4. **Why now (clean):** strengthens an existing gate, decided before any v2 data
+   exists. The audit *harness* is a judgment-layer build (author present); this
+   deviation pre-commits the **denominator discipline** the harness must obey, so
+   the discipline cannot be quietly chosen after data exists.
+
+**Scope:** no measured Phase-1 quantity changes; no audit code is built this
+session (harness is a hard stop). This records the pre-commitment only.
+
+---
+
+## D26 — Phase-1c probe-failure policy: owed pre-registration item (GATE-Δ)
+
+**Date:** 2026-06-14 (v2 probe-compiler build window; pre-data).
+**Affects:** Phase 1c probe execution against the real suite
+(probe_compiler_design §5.2/§8). AMENDS the frozen prereg_1b.md (6c8cc47) via its
+§7 deviation mechanism. A **numbered, OWED** item — the policy must be written and
+frozen **before any Phase-1c data is collected**; it is NOT implemented now.
+
+### Owed policy (to be written before 1c data)
+
+A pre-committed real-suite probe-failure policy covering, at minimum:
+1. **Retry budget** for a probe that cannot complete (bounded, per §5.2).
+2. **Persistent-failure threshold** at which a probe is logged as a coverage gap.
+3. **Classification** of probe-infrastructure errors vs world-state signals:
+   `429` / transient `5xx` / timeout ⇒ **inconclusive** (certifies nothing,
+   raises no strict interrupt alone); a compiled-hard-invariant violation ⇒
+   **world-state signal**. The §5.2 distinction made operational.
+4. The **caution-vs-economics trade**: an inconclusive guaranteed pre-completion
+   sweep routes the commit to **caution (unverified)**, never silently passed —
+   versus the clean-run overhead cap. Where the boundary sits is the owed choice.
+
+**Status:** OWED. No 1c logic is implemented this session. Recorded so the policy
+is a pre-registered obligation, not a post-hoc choice made once 1c data exists.
+The deterministic mock has no transport weather, so nothing in this session
+exercises the policy — it becomes load-bearing only in the real-suite study.
