@@ -190,10 +190,15 @@ as lower-confidence telemetry, counts toward neither strict recall nor a plan in
 **(v0.4, A1):** this rule gates the **baseline-drift path (2(ii)) ONLY**; compiled hard
 invariants (2(i)) and the relational/join read (§1.1) fire without it.
 
-Detected drift interrupts the orchestrator **only when** it instantiates a *general*
-fault-shape — **or** a second independent probe corroborates it. Drift that maps to no
-fault-shape and is uncorroborated is **telemetry**. The fault-shape vocabulary is
-ontology-general; it names no category.
+Detected drift interrupts the orchestrator on its own **only when** it instantiates a
+*general* fault-shape. Drift that maps to no fault-shape (a shapeless whole-payload
+difference) is **telemetry** unless it **persists across a confirming re-observation**, in
+which case it is promoted to a **caution-grade** corroborated invalidation (§2.2). The
+fault-shape vocabulary is ontology-general; it names no category.
+
+*(v0.4 + D28: the v0.3 "or a second independent probe corroborates it" clause is **dead** —
+correlated noise self-corroborates [6/18 false interrupts passed it, two on a clean run;
+archaeology_v2 §E.4]. Corroboration is now persistence over time, §2.2.)*
 
 **The six general fault-shapes (enum):**
 
@@ -206,6 +211,41 @@ ontology-general; it names no category.
    a stationary surface (caught by the order-sensitive read, missed by the fingerprint).
 6. **RELATION_BROKEN** *(new, v0.4)* — a relation across surfaces broke (caught by the
    relational/join read; **exempt from transition-typing** — no single-surface baseline).
+
+### 2.2 Corroboration (persistence over time) *(D28, deterministic — no LLM)*
+
+The typing engine (§2/§2.1) types a **single** observation. Corroboration is the layer
+**above** it that decides, over an **ordered sequence** of observations of one surface,
+whether an *ambiguous* signal earns a route to the orchestrator. It is fully deterministic.
+
+- **What is ambiguous.** A signal is ambiguous iff it is **non-status-coded** and is **not**
+  already a clean fault-shape or a hard-invariant violation — i.e. the per-observation engine
+  returned **telemetry** for shapeless drift. Typed drift and hard invariants are *not*
+  ambiguous: they fire on their own at INTERRUPT grade.
+- **Persistence, not breadth.** An ambiguous signal promotes **only if a confirming
+  re-observation of the SAME surface still shows the anomaly**. A one-shot wobble that has
+  **healed** by the re-look stays telemetry. The dead v0.3 "second independent signal" clause
+  is replaced by this: persistence over time, because correlated noise self-corroborates.
+- **Threshold = ONE re-look** (least-latency default, frozen pre-data, D28): two
+  **consecutive** anomalous observations (first sighting + one confirming re-look). A surface
+  with **no** re-observation before the run ends stays telemetry and is backstopped by the
+  cadence **pre-completion sweep** — **never promoted blind**.
+- **Promotion grade = CAUTION.** A persistence-confirmed ambiguous signal becomes a
+  corroborated invalidation at **caution grade** (a recommended action routed to the
+  orchestrator), kept **distinct** from the hard interrupt-and-replan path.
+- **Status-coded fast path retained.** A status-coded signal (the §5.3 compiled status
+  expectation / STATUS_CLASS hard invariant) keeps its **direct interrupt path with no
+  persistence**. Persistence governs only the non-status-coded signals.
+- **No raw-count aggregation (hard prohibition, D28).** The layer builds **no** "wobbles
+  exceed N ⇒ stop" counter — that is v1's escalation-cap pathology (172 noise fires ground
+  one run to death). Each persistence-confirmed surface is emitted as a **separate** caution;
+  the layer **aggregates nothing**. Breadth across surfaces is the orchestrator's existing
+  replan decision, which sees the multiple live cautions.
+
+**Named dependency (cadence, next session).** Corroboration consumes re-observations through
+a minimal interface; the **guaranteed pre-completion sweep** that supplies a final re-look
+for an un-re-observed surface is the cadence layer's job (§3.1) and is **not built this
+session** — corroboration only declares the requirement.
 
 ---
 

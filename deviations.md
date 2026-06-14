@@ -995,3 +995,67 @@ token anywhere) and one-example-per-shape.
 
 **Custody note:** committed before the prompt (C2) is written or tuned and before any
 compile call is made, so the examples are fixed independent of measured recall.
+
+---
+
+## D28 — Corroboration = persistence over time (one re-look threshold; deterministic)
+
+**Date:** 2026-06-14 (v2 corroboration build window; committed BEFORE the layer is
+implemented). **Affects:** the probe-primary corroboration layer
+(`sentinel_v2/corroboration.py`; probe_compiler_design_v0.4.md §2.1/§2.2). This records
+the author ruling that fixes what "corroborated" means and the promotion threshold, both
+frozen **before any matrix data exists** (least-latency default; blind to effect direction
+on v2's recall). The layer is **deterministic — no LLM on the corroboration path** (spend
+target $0).
+
+### Background — why the second-signal clause is dead
+
+v1's drafted "a second independent signal corroborates" rule is broken as written:
+**correlated noise self-corroborates** — 6 of 18 false interrupts passed it, two on a
+clean run (archaeology_v2 §E.4, G11). A second concurrent reading of the same noisy
+trigger is not independent evidence; it is the same wobble seen twice. The clause is
+retired.
+
+### The ruling
+
+1. **Persistence over time.** An **ambiguous** signal — non-status-coded, and not already
+   a clean fault-shape or a hard-invariant violation — promotes **only if a confirming
+   re-observation of the SAME surface still shows the anomaly**. A one-shot wobble that has
+   **healed by the re-look** stays telemetry. Persistence (does it survive a fresh look),
+   not breadth (a second simultaneous signal), is the corroborator.
+2. **Threshold = ONE confirming re-look** (the least-latency default), committed before any
+   matrix data. Operationally: two **consecutive** anomalous observations of the surface
+   (the first sighting + one confirming re-look). A surface that gets **no** re-observation
+   before the run ends stays telemetry and is backstopped by the cadence **pre-completion
+   sweep** (next session, D-series TBD); it is **never promoted blind**.
+3. **Promote to CAUTION.** A persistence-confirmed ambiguous signal becomes a corroborated
+   invalidation at **CAUTION grade** (a recommended action routed to the orchestrator),
+   kept **distinct from the hard interrupt-and-replan path**. Clean fault-shapes and hard
+   invariants still fire on their own, at INTERRUPT grade, as before.
+4. **Status-coded fast path retained.** A status-coded signal keeps its **direct interrupt
+   path with no persistence required** (validated in-corpus: zero false interrupts carried
+   status ≥ 400; archaeology_v2 G10). Persistence governs **only** the non-status-coded
+   signals. (Tightening per §5.3: "status-coded" means a status that is *unexpected for that
+   surface per a compiled expectation* — operationally the STATUS_CLASS hard invariant —
+   not merely a raw ≥ 400.)
+5. **No raw-count aggregation (HARD PROHIBITION).** Do **not** build any "small errors
+   exceed N, so stop" counter. Raw aggregation of unconfirmed wobbles is the v1
+   escalation-cap pathology (one cell logged 172 noise fires on uninjected surfaces before
+   grinding to death; archaeology_v1 §1/§4). Breadth of confirmed problems is handled at
+   the **orchestrator's existing replan decision**, which sees multiple live cautions. The
+   corroboration layer emits each persistence-confirmed surface as a **separate** corroborated
+   invalidation and **aggregates nothing** — no counter, no per-fire escalation, no
+   breadth-threshold interrupt.
+
+### Why now (clean)
+
+This is a pre-data design commitment, decided before the layer is written and before any v2
+measured quantity exists. The persistence rule and the one-re-look threshold are frozen here
+so neither can be quietly chosen after data exists. The cadence pre-completion-sweep
+*mechanism* that guarantees a final re-look is a **hard stop this session** (next session);
+corroboration only **declares the dependency** on it. The deterministic mock has no transport
+weather, so the §5.2 broken-probe policy (owed, D26) is not exercised here.
+
+**Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell is touched;
+the layer runs only on synthetic fixtures and seen-category test worlds. sentinel_v2 stays
+flag-gated off (flag off byte-identical to Phase 1).
