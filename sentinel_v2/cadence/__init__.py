@@ -1,0 +1,29 @@
+"""Cadence layer (v2): the frozen D29 semantics (decisions/cadence_semantics.md).
+
+DETERMINISTIC, $0 LLM, category-blind. Everything here lives behind the v2 flag; the
+flag-off path is byte-identical to Phase 1. Cadence SUPPLIES corroboration's confirming
+re-look (the live, header-carrying ReObservationSource) but does NOT change D28's
+decision logic.
+
+Built checkpoint by checkpoint: C1 ledger + work-at-risk + admission; C2 live source +
+harvest gate; C3 barriers + freshness + relations; C4 budget allocator; C5 wobble
+throttle + probe-failure; C6 provisional promotion + replan GC; C7 UNCOVERED accounting.
+"""
+from __future__ import annotations
+
+from sentinel_v2.cadence.ledger import (NON_TERMINAL, AdmissionResult,
+                                        CoverageLedger, FinalizationError,
+                                        LedgerEntry, TerminalState, admit,
+                                        min_coverage_lower_bound)
+from sentinel_v2.cadence.workatrisk import (BLOCKING_THRESHOLD,
+                                            HIGH_RISK_THRESHOLD, PlanAssumption,
+                                            is_blocking_risk, is_high_risk,
+                                            remaining_dependent_work,
+                                            work_at_risk)
+
+__all__ = [
+    "PlanAssumption", "work_at_risk", "remaining_dependent_work",
+    "is_high_risk", "is_blocking_risk", "HIGH_RISK_THRESHOLD", "BLOCKING_THRESHOLD",
+    "TerminalState", "LedgerEntry", "CoverageLedger", "FinalizationError",
+    "NON_TERMINAL", "AdmissionResult", "admit", "min_coverage_lower_bound",
+]
