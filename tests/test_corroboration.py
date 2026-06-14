@@ -281,3 +281,73 @@ def test_reobservations_reconstructed_from_a_real_trace(make_world):
     obs = source.observations("/inventory/items/WID-001")
     assert len(obs) == 2 and all(o.status == 200 for o in obs)
     assert obs[0].body["sku"] == "WID-001"
+
+
+# == C4: anti-aggregation guard (D28 hard prohibition) =========================
+
+def _hash_probe(target):
+    return _probe(FaultShape.VALUE_CHANGED, Comparison.PROOF_BASELINE,
+                  Lens(op=LensOp.CONTENT_HASH), target=target,
+                  cost_class=CostClass.MODERATE)
+
+
+def test_many_transient_wobbles_promote_nothing_and_grind_nothing():
+    """The escalation-cap pathology cannot recur. A healthy surface that wobbles
+    intermittently (each wobble heals by the next look) never persists, so it
+    promotes NOTHING — and there is no per-fire escalation to grind on (the layer
+    makes ONE decision over the whole sequence, not one per observation)."""
+    base = R({"content": "original"})
+    wobble = R({"content": "blip"})
+    seq = [wobble, base] * 100                  # 200 looks, never two anomalies adjacent
+    sig = Signal(probe=_hash_probe("/docs/passages/pol-returns"), baseline=base,
+                 observations=seq, obligations=_obl())
+    assert corroborate_signal(sig) is None
+    assert corroborate([sig]) == []
+
+
+def test_output_is_persistence_keyed_not_count_keyed():
+    """No raw-count path: a surface observed anomalously 500 times emits EXACTLY
+    ONE caution — the persistence decision — not one-per-fire. The output never
+    scales with the number of observations; there is no 'wobbles exceed N' counter."""
+    base = R({"content": "original"})
+    anomalous = R({"content": "rewritten"})
+    sig = Signal(probe=_hash_probe("/docs/passages/pol-returns"), baseline=base,
+                 observations=[anomalous] * 500, obligations=_obl())
+    out = corroborate([sig])
+    assert len(out) == 1 and out[0].grade is Grade.CAUTION
+
+
+def test_breadth_of_unconfirmed_wobbles_across_surfaces_promotes_nothing():
+    """No breadth aggregation: many DISTINCT surfaces each with a single
+    unconfirmed wobble promote NOTHING — there is no 'k surfaces wobbled, so
+    interrupt' path. Breadth is the orchestrator's replan decision, not ours."""
+    base = R({"content": "original"})
+    wobble = R({"content": "blip"})
+    sigs = [Signal(probe=_hash_probe(f"/docs/passages/p{i}"), baseline=base,
+                   observations=[wobble], obligations=_obl())
+            for i in range(50)]
+    assert corroborate(sigs) == []
+
+
+def test_several_confirmed_cautions_are_separate_invalidations_no_merge():
+    """Each independently-persistent surface is emitted as its OWN caution; the
+    layer aggregates nothing across surfaces (no merge, no count, no breadth
+    interrupt). The orchestrator sees the separate live cautions."""
+    base = R({"content": "original"})
+    persisted = [R({"content": "rewritten"}), R({"content": "still rewritten"})]
+    sigs = [Signal(probe=_hash_probe(f"/docs/passages/p{i}"), baseline=base,
+                   observations=persisted, obligations=_obl())
+            for i in range(4)]
+    out = corroborate(sigs)
+    assert len(out) == 4                                  # one per surface, no merge
+    assert all(i.grade is Grade.CAUTION for i in out)
+    assert len({i.target for i in out}) == 4             # distinct, separate
+
+
+def test_persistence_decision_is_count_invariant():
+    """No raw-count path, proven behaviourally: the decision is invariant to how
+    MANY observations there are — only consecutive persistence (or its absence)
+    matters. There is no 'exceeds N' threshold anywhere."""
+    assert {decide_persistence([True] * n) for n in range(2, 200)} == {P}
+    assert {decide_persistence([True, False] * n) for n in range(1, 200)} == {T}
+    assert decide_persistence([True]) is T
