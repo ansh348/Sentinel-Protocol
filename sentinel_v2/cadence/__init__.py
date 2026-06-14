@@ -11,6 +11,10 @@ throttle + probe-failure; C6 provisional promotion + replan GC; C7 UNCOVERED acc
 """
 from __future__ import annotations
 
+from sentinel_v2.cadence.budget import (CONFIRMATION_RESERVE_FRACTION,
+                                        KG3_OVERHEAD_CAP, BudgetPlan,
+                                        ConfirmationItem, CoverageItem, allocate,
+                                        clean_overhead, clean_overhead_ok)
 from sentinel_v2.cadence.barriers import (RELATION_UNDER_EMISSION_RESIDUAL,
                                           CoverageSpec, Observation, WorkerPlan,
                                           close_specs, fresh_observation,
@@ -41,4 +45,6 @@ __all__ = [
     "Observation", "CoverageSpec", "WorkerPlan", "close_specs",
     "fresh_observation", "had_stale_observation", "relation_consistent_snapshot",
     "run_barrier_hierarchy", "RELATION_UNDER_EMISSION_RESIDUAL",
+    "KG3_OVERHEAD_CAP", "CONFIRMATION_RESERVE_FRACTION", "clean_overhead",
+    "clean_overhead_ok", "CoverageItem", "ConfirmationItem", "BudgetPlan", "allocate",
 ]
