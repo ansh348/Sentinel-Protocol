@@ -11,6 +11,10 @@ throttle + probe-failure; C6 provisional promotion + replan GC; C7 UNCOVERED acc
 """
 from __future__ import annotations
 
+from sentinel_v2.cadence.harvest import (HarvestVerdict, LiveReObservationSource,
+                                         WorkerRead, harvest_equivalence,
+                                         is_request_side_error,
+                                         monitored_region_present)
 from sentinel_v2.cadence.ledger import (NON_TERMINAL, AdmissionResult,
                                         CoverageLedger, FinalizationError,
                                         LedgerEntry, TerminalState, admit,
@@ -26,4 +30,6 @@ __all__ = [
     "is_high_risk", "is_blocking_risk", "HIGH_RISK_THRESHOLD", "BLOCKING_THRESHOLD",
     "TerminalState", "LedgerEntry", "CoverageLedger", "FinalizationError",
     "NON_TERMINAL", "AdmissionResult", "admit", "min_coverage_lower_bound",
+    "WorkerRead", "HarvestVerdict", "harvest_equivalence", "is_request_side_error",
+    "monitored_region_present", "LiveReObservationSource",
 ]
