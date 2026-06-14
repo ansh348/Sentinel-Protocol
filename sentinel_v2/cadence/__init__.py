@@ -11,6 +11,12 @@ throttle + probe-failure; C6 provisional promotion + replan GC; C7 UNCOVERED acc
 """
 from __future__ import annotations
 
+from sentinel_v2.cadence.barriers import (RELATION_UNDER_EMISSION_RESIDUAL,
+                                          CoverageSpec, Observation, WorkerPlan,
+                                          close_specs, fresh_observation,
+                                          had_stale_observation,
+                                          relation_consistent_snapshot,
+                                          run_barrier_hierarchy)
 from sentinel_v2.cadence.harvest import (HarvestVerdict, LiveReObservationSource,
                                          WorkerRead, harvest_equivalence,
                                          is_request_side_error,
@@ -32,4 +38,7 @@ __all__ = [
     "NON_TERMINAL", "AdmissionResult", "admit", "min_coverage_lower_bound",
     "WorkerRead", "HarvestVerdict", "harvest_equivalence", "is_request_side_error",
     "monitored_region_present", "LiveReObservationSource",
+    "Observation", "CoverageSpec", "WorkerPlan", "close_specs",
+    "fresh_observation", "had_stale_observation", "relation_consistent_snapshot",
+    "run_barrier_hierarchy", "RELATION_UNDER_EMISSION_RESIDUAL",
 ]
