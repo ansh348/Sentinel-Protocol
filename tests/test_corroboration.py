@@ -4,10 +4,12 @@ Synthetic anomaly-flag sequences only — fully deterministic, no LLM, no world.
 from __future__ import annotations
 
 from conftest import auth_headers, get_token
-from sentinel_v2.corroboration import (CorroboratedInvalidation, Grade,
+from sentinel_v2.corroboration import (PRE_COMPLETION_SWEEP_DEPENDENCY,
+                                       CorroboratedInvalidation, Grade,
                                        PersistenceDecision, Signal,
-                                       corroborate, corroborate_signal,
-                                       decide_persistence)
+                                       TraceReObservations, corroborate,
+                                       corroborate_signal, decide_persistence,
+                                       signal_from_source)
 from sentinel_v2.probe_spec import (CadenceHint, Comparison, CostClass,
                                     EvidenceClass, FaultShape, Lens, LensOp,
                                     Probe, Provenance)
@@ -223,3 +225,59 @@ def test_end_to_end_healthy_real_surface_emits_nothing(make_world):
     sig = Signal(probe=probe, observations=[obs, obs],  # healthy + re-look
                  invariant=Invariant(status_in=(200,)))
     assert corroborate_signal(sig) is None
+
+
+# == C3: the re-observation interface (the cadence seam) ========================
+
+def _probe_events(path, bodies, *, start_seq=1):
+    """Synthetic probe_call/probe_response trace events for one surface."""
+    events = []
+    for i, body in enumerate(bodies):
+        seq = start_seq + i
+        events.append({"event_type": "probe_call",
+                       "payload": {"probe_seq": seq, "method": "GET", "path": path}})
+        events.append({"event_type": "probe_response",
+                       "payload": {"probe_seq": seq, "status": 200, "body": body}})
+    return events
+
+
+def test_no_confirming_reobservation_in_the_source_stays_telemetry():
+    """The trace holds ONE observation of the surface — a wobble with no re-look.
+    The signal stays telemetry: never promoted blind (D28). The pre-completion
+    sweep dependency is what later supplies the missing re-look."""
+    target = "/docs/passages/pol-returns"
+    source = TraceReObservations(_probe_events(target, [{"content": "rewritten"}]))
+    sig = signal_from_source(_shapeless_probe(), source,
+                             baseline=R({"content": "original"}), obligations=_obl())
+    assert len(sig.observations) == 1
+    assert corroborate_signal(sig) is None
+    # the named dependency is recorded, not built
+    assert "pre_completion_sweep" in PRE_COMPLETION_SWEEP_DEPENDENCY
+
+
+def test_a_confirming_reobservation_in_the_source_promotes():
+    """When the source carries a confirming re-look (as the cadence layer will
+    supply next session), the persisted ambiguous signal promotes to caution."""
+    target = "/docs/passages/pol-returns"
+    source = TraceReObservations(_probe_events(
+        target, [{"content": "rewritten"}, {"content": "still rewritten"}]))
+    sig = signal_from_source(_shapeless_probe(), source,
+                             baseline=R({"content": "original"}), obligations=_obl())
+    assert len(sig.observations) == 2
+    inv = corroborate_signal(sig)
+    assert inv is not None and inv.grade is Grade.CAUTION
+
+
+def test_reobservations_reconstructed_from_a_real_trace(make_world):
+    """End to end: real probe reads land in the trace probe side channel and the
+    interface reconstructs the ordered observation sequence per surface."""
+    from trace import read_trace
+    world = make_world(probe_channel=True, world_rev=1)
+    token = get_token(world.client)
+    ex = ProbeExecutor(world.client, auth_token=token)
+    ex.get("/inventory/items/WID-001")
+    ex.get("/inventory/items/WID-001")             # a re-look
+    source = TraceReObservations(read_trace(world.trace_path))
+    obs = source.observations("/inventory/items/WID-001")
+    assert len(obs) == 2 and all(o.status == 200 for o in obs)
+    assert obs[0].body["sku"] == "WID-001"

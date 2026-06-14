@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Protocol, Sequence
 
 from sentinel_v2.probe_spec import Comparison, EvidenceClass, Probe
 from sentinel_v2.probes import ProbeResult
@@ -155,3 +155,80 @@ def corroborate(signals: Iterable[Signal]) -> list[CorroboratedInvalidation]:
         if inv is not None:
             out.append(inv)
     return out
+
+
+# -- C3: the re-observation interface (the cadence seam) -----------------------
+#
+# Corroboration needs the ORDERED observations of a surface to decide persistence.
+# It pulls them through this minimal interface. Today the only source is the run
+# trace (the observations already present). NEXT SESSION the event-gated cadence
+# layer fills the same interface, including the guaranteed pre-completion sweep.
+# Cadence SCHEDULING is a hard stop this session; corroboration only declares the
+# dependency and consumes whatever observations exist.
+
+# The named dependency on cadence (NOT built this session; design §3.1, D28):
+# corroboration never promotes a surface blind. A surface with no confirming
+# re-observation stays telemetry; the cadence layer's GUARANTEED PRE-COMPLETION
+# SWEEP supplies a final re-look before run end so an un-re-observed load-bearing
+# surface still gets its one confirming look. This module DECLARES the requirement
+# only — the sweep mechanism is the next session's work.
+PRE_COMPLETION_SWEEP_DEPENDENCY = (
+    "cadence.pre_completion_sweep: guarantees a final re-observation of each "
+    "load-bearing surface before run end (design §3.1); not built this session "
+    "(D28). Until it exists, an un-re-observed surface stays telemetry, never "
+    "promoted blind.")
+
+
+class ReObservationSource(Protocol):
+    """The minimal interface corroboration consumes re-observations through. It
+    returns the ORDERED observations of a surface (oldest first). Fed from the
+    trace now; filled by the cadence layer (incl. the pre-completion sweep) next
+    session — corroboration is agnostic to which."""
+
+    def observations(self, target: str) -> list[ProbeResult]: ...
+
+
+class TraceReObservations:
+    """A `ReObservationSource` backed by a run trace's probe side channel: pairs
+    `probe_call` (method/path) with `probe_response` (status/body) by `probe_seq`
+    and groups the observations by surface path, in trace order.
+
+    Headers are not carried in the trace probe events, so reconstructed
+    observations have empty headers — sufficient for status / body / shape / hash
+    reads; a header-watched probe needs the live cadence source."""
+
+    def __init__(self, events: Iterable[dict]) -> None:
+        self._by_target: dict[str, list[ProbeResult]] = {}
+        calls: dict[Any, tuple[str, str]] = {}
+        for e in events:
+            etype = e.get("event_type")
+            payload = e.get("payload") or {}
+            if etype == "probe_call":
+                calls[payload.get("probe_seq")] = (payload.get("method", "GET"),
+                                                   payload.get("path", ""))
+            elif etype == "probe_response":
+                seq = payload.get("probe_seq")
+                if seq not in calls:
+                    continue
+                method, path = calls[seq]
+                obs = ProbeResult(method=method, path=path,
+                                  status=payload.get("status"), headers={},
+                                  body=payload.get("body"))
+                self._by_target.setdefault(path, []).append(obs)
+
+    def observations(self, target: str) -> list[ProbeResult]:
+        return list(self._by_target.get(target, []))
+
+
+def signal_from_source(probe: Probe, source: ReObservationSource, *,
+                       baseline: Optional[ProbeResult] = None,
+                       obligations: Optional[BaselineObligations] = None,
+                       invariant: Optional[Invariant] = None,
+                       partner: Optional[ProbeResult] = None) -> Signal:
+    """Build a Signal by pulling the surface's ordered observations from a
+    `ReObservationSource`. A surface the source has not (yet) re-observed yields a
+    short sequence — which stays telemetry, never promoted blind (the
+    pre-completion-sweep dependency above is what later supplies the re-look)."""
+    return Signal(probe=probe, observations=source.observations(probe.target),
+                  baseline=baseline, obligations=obligations, invariant=invariant,
+                  partner=partner)
