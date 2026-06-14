@@ -941,10 +941,17 @@ A pre-committed real-suite probe-failure policy covering, at minimum:
    sweep routes the commit to **caution (unverified)**, never silently passed —
    versus the clean-run overhead cap. Where the boundary sits is the owed choice.
 
-**Status:** OWED. No 1c logic is implemented this session. Recorded so the policy
-is a pre-registered obligation, not a post-hoc choice made once 1c data exists.
-The deterministic mock has no transport weather, so nothing in this session
-exercises the policy — it becomes load-bearing only in the real-suite study.
+**Status:** ~~OWED~~ → **WRITTEN / DISCHARGED by D29 (2026-06-14)**. The probe-failure
+policy is now frozen as part of the cadence semantics (decisions/cadence_semantics.md §13,
+recorded in D29 below): retry budget **1** then terminate, persistence threshold **one
+confirming re-look** (the D28 value), transport-versus-world classification (transport
+failure ⇒ `UNCOVERED`; predicate violation ⇒ a genuine detection on the typing/persistence
+path), and a failed probe terminates **`UNCOVERED_CAUTION`** (or `UNCOVERED_BLOCKING` above
+the work-at-risk blocking threshold) — never inconclusive telemetry. The deterministic mock
+has no transport weather, so the retry budget is a **principled** value (seen
+transport-failure rate = 0) to be revisited as a fresh logged deviation once real
+transport rates exist; it becomes load-bearing only in the real-suite study. No 1c logic is
+implemented by the freeze.
 
 ---
 
@@ -1059,3 +1066,102 @@ weather, so the §5.2 broken-probe policy (owed, D26) is not exercised here.
 **Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell is touched;
 the layer runs only on synthetic fixtures and seen-category test worlds. sentinel_v2 stays
 flag-gated off (flag off byte-identical to Phase 1).
+
+---
+
+## D29 — Complete frozen cadence semantics (KG3 denominator pinned; discharges D26)
+
+**Date:** 2026-06-14 (v2 cadence freeze; pre-implementation — committed BEFORE any cadence
+behavior is built). **Affects:** the v2 cadence layer (scheduler, coverage ledger, barrier
+hierarchy, budget allocator, work-at-risk, wobble throttling, probe-failure policy,
+provisional promotion). **Design of record:** `decisions/cadence_semantics.md` (the complete
+frozen knob table is its §17). AMENDS the frozen prereg_1b.md (6c8cc47) via its §7 deviation
+mechanism. This is a **pre-registration commitment**: the values are frozen here so none can
+be quietly chosen after data exists; any later change to any knob is a new logged deviation
+requiring separate measurement (cold-review finding 14).
+
+**No code.** This deviation records documentation only. The cadence scheduler stays **NoOp**;
+no ledger, barrier, allocator, or scheduler behavior is implemented; the flag-off path stays
+**byte-identical to Phase 1**.
+
+### What is frozen (full table: decisions/cadence_semantics.md §17)
+
+- **Coverage ledger + terminal-state machine** (§1): every load-bearing assumption reaches
+  exactly one of `OBSERVED_FRESH` / `OBSERVED_STALE_BUT_RECHECKED` / `UNCOVERED_CAUTION` /
+  `UNCOVERED_BLOCKING` / `NOT_LOAD_BEARING` before output; "covered" requires the compiled
+  predicate re-evaluated against a sufficient observation, not a mere endpoint touch.
+- **Work-at-risk (dial 1)** = `remaining_dependent_work × irreversibility ×
+  P(no_later_natural_observation) × actionability`, category-blind from the plan DAG, with:
+  - `remaining_dependent_work` **normalized to a fraction in (0,1]** = downstream-dependent
+    remaining steps/branches ÷ total remaining steps/branches at evaluation time (sunk work
+    excluded). *(Ratified fold: as a raw count the product crossed 0.8 on short plans;
+    normalized, the 0.5/0.8 thresholds are meaningful and the ordering is unchanged.)*
+  - irreversibility `1.0` (downstream write/commit/side effect) / `0.3` (else);
+  - P(no-later-obs) `1.0` single-visit / `0.2` re-touched;
+  - actionability `1.0` (replan can still avoid the work) / `0.0` (consumed);
+  - **high-risk threshold `0.5`** (paired-observation reserve); **blocking threshold `0.8`**.
+- **Budget (dial 2; KG3 denominator pinned VERBATIM)** — clean-run probe overhead **< 12%**.
+  The gated denominator is **US dollars** on `total_cost_usd`, exactly as KG3 froze
+  (`analysis/gates.py`): `(clean-cell treatment median total_cost_usd − clean-cell S1 batch
+  median total_cost_usd) / clean-cell S1 batch median total_cost_usd <= 0.12`. Probe LLM and
+  tool-call cost roll into `total_cost_usd` as **waste, no separate forgivable line**. The
+  **paid-probe-per-run-length count** is reported as a **submetric** (the other cost
+  dimension). Seen corpus: the cap is **slack on dollars** (probes are LLM-free side-channel
+  reads ≈ $0) but **tighter on count** (coverage lower bound 5 obs vs clean run lengths 8–24
+  calls = 21–63%); the **uncovered valve trips first on the shortest write-bearing run**; the
+  dollar slack **rides on worker reads clearing the §8 harvest-equivalence gate**. Priority:
+  coverage → live-wobble confirmation → speculative; confirmation capped at **40%** of the
+  post-coverage remainder. UNCOVERED is never a detection hit; an uncovered surface coincident
+  with a real change is a risk-weighted recall miss (closes the pass-by-not-probing path).
+- **Barrier hierarchy** (§9): worker / shard / relation / global, replacing the single global
+  sweep; union of per-worker barrier surfaces = the load-bearing set. **Relation coverage**
+  (§10): consistent-snapshot only, else `UNCOVERED` for that relation.
+- **Freshness** (§6): observed after the last consume-affecting point; recency never waives a
+  barrier. **Harvest equivalence** (§8): the six-condition predicate; reads only; a worker
+  request-side error is request-not-surface and never trips the status path.
+- **Wobble throttling** (§11): one open wobble per `(surface, assumption)`; coalescing;
+  minimum confirmation interval = the next scheduled re-observation (barrier/harvest), not an
+  immediate re-fire; risk-ordered confirmation. Preserves D28 anti-aggregation.
+- **Terminal-time anomaly** (§12): an ambiguous singleton with no budget/time to confirm →
+  `UNCOVERED_CAUTION`, never scored clean, never a one-shot interrupt. **Status-coded
+  anomalies keep the D28 fast path.**
+- **Provisional promotion** (§14; ratified fold): an unregistered output-feeding worker read
+  becomes a provisional record at **high work-at-risk but capped below the blocking
+  threshold** — it earns coverage and the paired reserve yet **cannot by itself trigger a
+  hard halt**; promotable to blocking **only after a barrier confirms it feeds an irreversible
+  commit**. Replan GC retires to `NOT_LOAD_BEARING` only with a no-dependency proof (keep-not-
+  flush, consistent with D28).
+
+### Probe-failure policy — discharges the owed D26 (§13)
+
+A probe that times out, hits a transport error, returns an unreadable/partial payload, or
+exhausts its retries terminates **`UNCOVERED_CAUTION`** (or `UNCOVERED_BLOCKING` above the
+blocking threshold) — never inconclusive telemetry. **Retry budget = `1`**, then terminate
+uncovered. **Persistence threshold = one confirming re-look** (the D28 value). **Transport-
+versus-world:** a transport failure (timeout/connection) is a failure to observe → `UNCOVERED`;
+a clean response that violates the predicate is a genuine detection → typing/persistence path.
+The retry budget is a **principled** value: the seen deterministic mock's transport-failure
+rate is **zero**, so it has no seen distribution to ground it and no effect on any seen run; it
+becomes load-bearing only in the real suite and **is to be revisited as a fresh logged
+deviation once real transport-failure rates exist.** With this, **D26 is discharged** (its
+Status above is updated to WRITTEN/DISCHARGED).
+
+### Preserved exactly (considered, HELD)
+
+The **status fast path stays `status >= 400`, well-formed observations only** (D28). The
+"unexpected per compiled expectation" rewording was considered and **HELD — not applied**.
+D28 (persistence = one confirming re-look; caution grade; no raw-count aggregation) is
+unchanged.
+
+### Why now (clean)
+
+A pre-implementation commitment: the cadence knobs are frozen before any cadence code or any
+v2 measured quantity exists, so no value can be chosen post-hoc to hit a gate. Calibration of
+the dialed values against the SEEN corpus and first principles (category-blind; no held-out
+read; no matrix spend; no dev-run) is recorded in
+`decisions/cadence_dial_calibration_2026-06-14.md`.
+
+**Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell is touched; no
+cadence behavior is implemented; the scheduler stays NoOp and sentinel_v2 stays flag-gated off
+(flag off byte-identical to Phase 1). Category-blind throughout — no quota/version/resource-
+specific behavior anywhere in the scheduler or ledger.
