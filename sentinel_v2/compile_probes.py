@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Optional
 
@@ -141,6 +143,29 @@ def compile_assumptions(plan: str, surface_appendix: str, trace: TraceWriter,
 # Enforcement gates → their §4 read-only shadow routes (build B5).
 GATE_SHADOWS = {"/repo/validate": REPO_GATE_SHADOW, "/docs/validate": DOCS_GATE_SHADOW}
 
+# Tolerate the surface appendix's "METHOD /path/{template}" dialect (the model
+# copies it verbatim) — a D5/D8-class transmission gap. The substrate normalizes
+# rather than fighting it: strip a leading HTTP method, and ground a route
+# template by globbing its {param} segments to a concrete representative.
+_METHOD_RE = re.compile(r"^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)\s+", re.IGNORECASE)
+
+
+def _normalize_surface(surface: str) -> str:
+    return _METHOD_RE.sub("", (surface or "").strip())
+
+
+def ground_surface(surface: str, samples: tuple) -> Optional[str]:
+    """Return a concrete, groundable path for a soft-assumption surface, or None
+    if it cannot ground (hallucinated). Strips a leading HTTP method; instantiates
+    a route template ({param}) to the lexicographically-first matching sample
+    (deterministic), so the appendix's natural dialect grounds."""
+    s = _normalize_surface(surface)
+    if "{" not in s:
+        return s if classify_url_pattern(s, samples) is not None else None
+    glob = re.sub(r"\{[^}]+\}", "*", s)
+    matches = sorted(p for p in samples if fnmatchcase(p, glob))
+    return matches[0] if matches else None
+
 
 class GroundingError(ValueError):
     """Raised when a soft assumption names a surface that does not ground against
@@ -165,12 +190,13 @@ class CompileResult:
     cost_usd: float = 0.0
 
 
-def _to_attachment_assumption(soft: SoftAssumption, aid: str) -> Assumption:
-    """Bridge a soft assumption to a substrate Assumption. Surface STRUCTURE picks
-    the kind: a pointer (a value on a stable shape) → VALUE; a bare surface →
-    STRUCTURE (a vanished field / changed shape / moved status all change the
-    {key:type} shape). read/predicate are substrate-filled; recovery_hint passes
-    through (empty ⇒ incomplete chain ⇒ telemetry, §3.3)."""
+def _to_attachment_assumption(soft: SoftAssumption, aid: str,
+                              surface: str) -> Assumption:
+    """Bridge a soft assumption to a substrate Assumption (using the GROUNDED
+    concrete surface). Surface STRUCTURE picks the kind: a pointer (a value on a
+    stable shape) → VALUE; a bare surface → STRUCTURE (a vanished field / changed
+    shape / moved status all change the {key:type} shape). read/predicate are
+    substrate-filled; recovery_hint passes through (empty ⇒ telemetry, §3.3)."""
     if soft.pointer:
         kind = AssumptionKind.VALUE
         read = f"field_read {soft.pointer}"
@@ -180,9 +206,9 @@ def _to_attachment_assumption(soft: SoftAssumption, aid: str) -> Assumption:
         read = "schema_fingerprint of the surface"
         predicate = "{key:type} shape unchanged vs clean baseline"
     prov = Provenance(plan_step=soft.plan_step, world_fact=soft.world_fact,
-                      surface=soft.surface, read=read, predicate=predicate,
+                      surface=surface, read=read, predicate=predicate,
                       recovery_hint=(soft.recovery_hint or "").strip())
-    return Assumption(assumption_id=aid, kind=kind, surface=soft.surface,
+    return Assumption(assumption_id=aid, kind=kind, surface=surface,
                       provenance=prov, truth_carried_by_ordinary_traffic=False,
                       pointer=soft.pointer)
 
@@ -193,52 +219,61 @@ def compile_pipeline(soft_set: SoftAssumptionSet, *, world_rev: int = 1,
     """Ground → provenance-gate → attachment+lens+typing. Deterministic given the
     soft set; the LLM call already happened (compile_assumptions)."""
     samples = path_samples_for_rev(world_rev)
-    # 1. appendix grounding — hallucinated surfaces fail LOUDLY (reuse N2 liveness)
-    hallucinated = sorted({a.surface for a in soft_set.assumptions
-                           if classify_url_pattern(a.surface, samples) is None})
+    # 1. appendix grounding (dialect-tolerant) — hallucinated surfaces fail LOUDLY
+    #    (reuse N2 liveness). Each soft surface is normalized + grounded to a
+    #    concrete path; one that cannot ground is a hallucination.
+    grounded: dict[int, str] = {}
+    hallucinated = []
+    for idx, soft in enumerate(soft_set.assumptions, start=1):
+        g = ground_surface(soft.surface, samples)
+        if g is None:
+            hallucinated.append(soft.surface)
+        else:
+            grounded[idx] = g
     if hallucinated:
-        raise GroundingError(hallucinated, world_rev)
+        raise GroundingError(sorted(set(hallucinated)), world_rev)
 
     probes, telemetry, passive, uncovered = [], [], [], []
     for idx, soft in enumerate(soft_set.assumptions, start=1):
         aid = f"a{idx}"
+        surface = grounded[idx]
         # 2. provenance gate (§3.3): the recovery-hint chain link is required;
         #    a missing link is interrupt-DISqualified → telemetry, never an interrupt
         if not (soft.recovery_hint and soft.recovery_hint.strip()):
-            telemetry.append({"assumption_id": aid, "surface": soft.surface,
+            telemetry.append({"assumption_id": aid, "surface": surface,
                               "reason": "incomplete provenance: no recovery hint (§3.3)"})
             continue
 
-        if soft.surface in GATE_SHADOWS:
+        if surface in GATE_SHADOWS:
             # §4 enforcement gate → shadow route behind the non-perturbation trapdoor
             prov = Provenance(plan_step=soft.plan_step, world_fact=soft.world_fact,
-                              surface=soft.surface, read="gate_status enforcing",
+                              surface=surface, read="gate_status enforcing",
                               predicate="enforcing == True",
                               recovery_hint=soft.recovery_hint)
             if world is None:
-                uncovered.append({"assumption_id": aid, "surface": soft.surface,
+                uncovered.append({"assumption_id": aid, "surface": surface,
                                   "reason": "§4 non-perturbation trapdoor cannot run "
                                             "(no world); UNCOVERED → caution (D1)"})
                 continue
-            res = compile_gate_probe(world, shadow_path=GATE_SHADOWS[soft.surface],
+            res = compile_gate_probe(world, shadow_path=GATE_SHADOWS[surface],
                                      provenance=prov, auth_token=auth_token)
             if res.enabled:
                 probes.append(res.probe)
             else:
-                uncovered.append({"assumption_id": aid, "surface": soft.surface,
+                uncovered.append({"assumption_id": aid, "surface": surface,
                                   "reason": res.reason})
             continue
 
         # 3. attachment + lens + typing (non-gate surfaces)
-        decision = evaluate_attachment(_to_attachment_assumption(soft, aid),
+        decision = evaluate_attachment(_to_attachment_assumption(soft, aid, surface),
                                        planned_write_set=planned_write_set)
         if decision.disposition is Disposition.ATTACH:
             probes.append(decision.probe)
         elif decision.disposition is Disposition.TELEMETRY_ONLY:
-            telemetry.append({"assumption_id": aid, "surface": soft.surface,
+            telemetry.append({"assumption_id": aid, "surface": surface,
                               "reason": decision.reason})
         else:  # PASSIVE
-            passive.append({"assumption_id": aid, "surface": soft.surface,
+            passive.append({"assumption_id": aid, "surface": surface,
                             "reason": decision.reason})
 
     return CompileResult(plan_id=soft_set.plan_id, probes=probes,

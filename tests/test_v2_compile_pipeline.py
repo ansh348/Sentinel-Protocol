@@ -93,6 +93,20 @@ def test_gate_assumption_uncovered_without_world():
     assert "trapdoor cannot run" in result.uncovered[0]["reason"]
 
 
+def test_tolerates_appendix_dialect_method_and_template():
+    """The model copies the appendix's 'METHOD /path/{template}' form; the
+    substrate normalizes it (strip method, ground a template to a concrete
+    representative) instead of rejecting it as hallucinated (D5/D8-class)."""
+    soft = _set(_a("GET /pricing/quote/{sku}"),       # method + template
+                _a("POST /repo/validate", world_fact="gate enforces",
+                   recovery_hint="replan"))           # method on a gate path
+    result = compile_pipeline(soft, world_rev=4)
+    targets = {p.target for p in result.probes}
+    assert any(t.startswith("/pricing/quote/") for t in targets)  # instantiated
+    # the gate path normalized to a §4 shadow probe (no world here → uncovered)
+    assert any("/repo/validate" in u["surface"] for u in result.uncovered)
+
+
 def test_full_seen_set_compiles_a_mix():
     soft = _set(
         _a("/pricing/quote/WID-001"),                              # structure

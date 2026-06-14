@@ -7,8 +7,11 @@ AN ASSUMPTION is something a plan step trusts about the world that, if it change
 make that step's work wasted or wrong. For each one, emit:
 - plan_step: the step (its subplan_id) that depends on it.
 - world_fact: the concrete fact that step trusts, in plain language.
-- surface: the REAL world path where that fact lives — copied from the SURFACE APPENDIX
-  below. Never invent a path; use one that appears in the appendix.
+- surface: the REAL world path where that fact lives, taken from the SURFACE APPENDIX
+  below. Give the BARE path only — no HTTP method prefix. Instantiate any {parameter}
+  segment with a concrete value the plan or corpus names (a specific SKU, passage id, or
+  file path); if the dependency covers a whole family, use one representative concrete
+  value. Never invent a path.
 - pointer: OPTIONAL. Include it ONLY when the fact is a specific field VALUE that could
   change while the surface's shape stays identical; give that field's JSON pointer (e.g.
   /content). OMIT it for everything else — a vanished field, a changed shape, a moved
