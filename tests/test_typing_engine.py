@@ -10,9 +10,8 @@ from sentinel_v2.probe_spec import (CadenceHint, Comparison, CostClass,
                                     EvidenceClass, FaultShape, Lens, LensOp,
                                     Probe, Provenance)
 from sentinel_v2.probes import ProbeResult
-from sentinel_v2.typing_engine import (BaselineObligations, Corroboration,
-                                       Invariant, Verdict, evaluate,
-                                       evaluate_baseline_drift,
+from sentinel_v2.typing_engine import (BaselineObligations, Invariant, Verdict,
+                                       evaluate, evaluate_baseline_drift,
                                        evaluate_hard_invariant)
 
 
@@ -151,20 +150,17 @@ def test_order_change_interrupts():
     assert evaluate_baseline_drift(probe, base, base, _obl()).verdict is Verdict.CLEAN
 
 
-def test_shapeless_drift_is_telemetry_unless_corroborated():
+def test_shapeless_drift_is_telemetry_from_the_per_observation_engine():
     """A whole-payload content-hash difference names no shape: telemetry, never a
-    raw interrupt — the bounded recall §0/A3 trades away. An independent probe's
-    corroboration (a SEAM input; wiring is a hard stop) escalates it."""
+    raw interrupt — the bounded recall §0/A3 trades away. The per-observation
+    engine NEVER escalates it; promotion to caution on PERSISTENCE is the
+    corroboration layer's job (D28, tested in test_corroboration.py)."""
     probe = _probe(FaultShape.VALUE_CHANGED, Comparison.PROOF_BASELINE,
                    Lens(op=LensOp.CONTENT_HASH), cost_class=CostClass.MODERATE)
     base, changed = R({"a": 1}), R({"a": 2})
 
     tele = evaluate_baseline_drift(probe, base, changed, _obl())
     assert tele.verdict is Verdict.TELEMETRY and tele.typed is False
-
-    corr = evaluate_baseline_drift(probe, base, changed, _obl(),
-                                   corroboration=Corroboration(confirmed=True))
-    assert corr.verdict is Verdict.INTERRUPT and corr.corroborated is True
 
     # identical payload: no drift at all
     assert evaluate_baseline_drift(probe, base, R({"a": 1}), _obl()).verdict \

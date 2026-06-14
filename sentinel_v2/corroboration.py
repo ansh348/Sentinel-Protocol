@@ -22,8 +22,14 @@ holdout category and has no quota/version/resource-specific behaviour.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
-from typing import Sequence
+from typing import Any, Iterable, Optional, Sequence
+
+from sentinel_v2.probe_spec import Comparison, EvidenceClass, Probe
+from sentinel_v2.probes import ProbeResult
+from sentinel_v2.typing_engine import (BaselineObligations, Evaluation,
+                                       Invariant, Verdict, evaluate)
 
 
 class PersistenceDecision(str, Enum):
@@ -52,3 +58,100 @@ def decide_persistence(anomaly_flags: Sequence[bool]) -> PersistenceDecision:
             return PersistenceDecision.PROMOTE
         prev = cur
     return PersistenceDecision.TELEMETRY
+
+
+# -- C2: the corroboration layer (route a surface from its observation sequence) --
+#
+# This replaces the inert engine seam. Per the typing engine each observation
+# yields a Verdict; this layer decides the SURFACE's route from the ORDERED
+# sequence of those verdicts:
+#   - any INTERRUPT verdict  -> INTERRUPT grade, on its own, no persistence
+#     (clean fault-shapes, hard invariants, and the status-coded fast path);
+#   - shapeless drift (TELEMETRY) that PERSISTS across a confirming re-look
+#     -> CAUTION grade (D28);
+#   - everything else stays telemetry (no invalidation emitted).
+
+
+class Grade(str, Enum):
+    INTERRUPT = "interrupt"  # hard, plan-breaking: interrupt-and-replan (fast path)
+    CAUTION = "caution"      # recommended action routed to orchestrator; kept distinct
+
+
+@dataclass(frozen=True)
+class CorroboratedInvalidation:
+    """One surface's route to the orchestrator. INTERRUPT grade is the hard path;
+    CAUTION grade is a persistence-confirmed recommended action (D28). Each surface
+    emits at most one of these; the layer aggregates nothing across surfaces."""
+    target: str
+    grade: Grade
+    fault_shape: str
+    evidence_class: str
+    reason: str
+    persistence: Optional[PersistenceDecision] = None  # set on the caution path
+    witness: Any = None
+
+
+@dataclass(frozen=True)
+class Signal:
+    """One probe plus the ORDERED observations of its surface (oldest first), with
+    the comparison inputs the engine needs. `observations` come from the trace now
+    and from the cadence layer's re-observations next session (§3, C3)."""
+    probe: Probe
+    observations: Sequence[Optional[ProbeResult]]
+    baseline: Optional[ProbeResult] = None
+    obligations: Optional[BaselineObligations] = None
+    invariant: Optional[Invariant] = None
+    partner: Optional[ProbeResult] = None
+
+
+def _evaluate_each(sig: Signal) -> list[Evaluation]:
+    return [evaluate(sig.probe, current=obs, baseline=sig.baseline,
+                     invariant=sig.invariant, obligations=sig.obligations,
+                     partner=sig.partner)
+            for obs in sig.observations]
+
+
+def corroborate_signal(sig: Signal) -> Optional[CorroboratedInvalidation]:
+    """Decide ONE surface's route from its observation sequence. Returns an
+    invalidation (INTERRUPT or CAUTION grade) or None (stays telemetry).
+    Deterministic; no LLM."""
+    evals = _evaluate_each(sig)
+    probe = sig.probe
+
+    # Fast path: clean fault-shapes, hard invariants, and the status-coded signal
+    # all interrupt on their own — no persistence required (D28).
+    for ev in evals:
+        if ev.verdict is Verdict.INTERRUPT:
+            return CorroboratedInvalidation(
+                target=probe.target, grade=Grade.INTERRUPT,
+                fault_shape=probe.fault_shape.value,
+                evidence_class=probe.evidence_class.value,
+                reason=ev.reason, witness=ev.witness)
+
+    # Ambiguous path: shapeless drift is telemetry per observation; it earns a
+    # CAUTION route only if it PERSISTS across a confirming re-look (§2.2). The
+    # anomaly flag is exactly "the engine still sees shapeless drift on this look".
+    anomaly_flags = [ev.verdict is Verdict.TELEMETRY for ev in evals]
+    decision = decide_persistence(anomaly_flags)
+    if decision is PersistenceDecision.PROMOTE:
+        return CorroboratedInvalidation(
+            target=probe.target, grade=Grade.CAUTION,
+            fault_shape=probe.fault_shape.value,
+            evidence_class=probe.evidence_class.value,
+            reason="ambiguous drift persisted across a confirming re-observation "
+                   "of the same surface (caution, D28)",
+            persistence=decision)
+    return None
+
+
+def corroborate(signals: Iterable[Signal]) -> list[CorroboratedInvalidation]:
+    """Run each surface's signal INDEPENDENTLY and emit each promoted/fast-path
+    surface as a SEPARATE corroborated invalidation. Aggregates NOTHING (D28): no
+    counter, no breadth threshold, no cross-surface merge. Breadth across surfaces
+    is the orchestrator's existing replan decision, which sees the live cautions."""
+    out: list[CorroboratedInvalidation] = []
+    for sig in signals:
+        inv = corroborate_signal(sig)
+        if inv is not None:
+            out.append(inv)
+    return out

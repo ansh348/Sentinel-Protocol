@@ -18,8 +18,10 @@ paths:
        that names no shape) is the bounded recall the design trades away (§0
        honesty, v0.4 A3).
 
-Hard stops respected: corroboration is a SEAM (an input the engine honors),
-never computed here; cadence and the compile prompt live elsewhere. No LLM.
+Corroboration is NOT computed here: this engine types a SINGLE observation. The
+corroboration LAYER (sentinel_v2.corroboration, ruling D28) decides persistence
+over a SEQUENCE of observations and promotes shapeless drift to a caution-grade
+invalidation; cadence and the compile prompt live elsewhere. No LLM.
 Rule Zero: nothing here names a holdout category.
 """
 from __future__ import annotations
@@ -76,18 +78,10 @@ class Invariant:
 
 
 @dataclass(frozen=True)
-class Corroboration:
-    """The §2.1 corroboration SEAM. The probe-primary corroboration WIRING is a
-    hard stop; the engine only honors a verdict the future layer supplies."""
-    confirmed: bool
-
-
-@dataclass(frozen=True)
 class Evaluation:
     verdict: Verdict
     path: str                       # "hard_invariant" | "baseline_drift" | "n/a"
     typed: bool = False             # instantiated the declared fault-shape?
-    corroborated: bool = False
     reason: str = ""
     witness: Any = None
 
@@ -201,9 +195,10 @@ def evaluate_hard_invariant(probe: Probe, current: Optional[ProbeResult],
 
 def evaluate_baseline_drift(probe: Probe, baseline: Optional[ProbeResult],
                             current: Optional[ProbeResult],
-                            obligations: BaselineObligations, *,
-                            corroboration: Optional[Corroboration] = None) -> Evaluation:
-    """§2(ii) + §2.1: enforce the five obligations, then type the drift."""
+                            obligations: BaselineObligations) -> Evaluation:
+    """§2(ii) + §2.1: enforce the five obligations, then type the drift. Types a
+    SINGLE observation; shapeless drift is telemetry here and is escalated only by
+    the corroboration layer if it persists across a re-look (§2.2, D28)."""
     if current is None or baseline is None:
         return Evaluation(Verdict.INCONCLUSIVE, "baseline_drift",
                           reason="probe did not complete (§5.2)")
@@ -220,21 +215,20 @@ def evaluate_baseline_drift(probe: Probe, baseline: Optional[ProbeResult],
                           reason=f"drift instantiates {probe.fault_shape.value}")
     if not _any_difference(probe, baseline, current):
         return Evaluation(Verdict.CLEAN, "baseline_drift")
-    # shapeless drift: telemetry unless an independent probe corroborates (§2.1)
-    if corroboration is not None and corroboration.confirmed:
-        return Evaluation(Verdict.INTERRUPT, "baseline_drift", typed=False,
-                          corroborated=True,
-                          reason="shapeless drift corroborated by an independent probe")
+    # Shapeless drift (a whole-payload difference naming no shape) is TELEMETRY from
+    # the per-observation engine. The corroboration LAYER (sentinel_v2.corroboration,
+    # D28) may promote it to a CAUTION-grade invalidation iff it PERSISTS across a
+    # confirming re-observation — persistence over time, not a second concurrent
+    # signal (the dead v0.3 clause: correlated noise self-corroborates).
     return Evaluation(Verdict.TELEMETRY, "baseline_drift",
-                      reason="drift maps to no fault-shape and is uncorroborated "
-                             "(the bounded recall §0/A3 trades for noise protection)")
+                      reason="drift maps to no fault-shape; the corroboration layer "
+                             "decides persistence (§2.2) — bounded recall §0/A3")
 
 
 def evaluate(probe: Probe, *, current: Optional[ProbeResult],
              baseline: Optional[ProbeResult] = None,
              invariant: Optional[Invariant] = None,
              obligations: Optional[BaselineObligations] = None,
-             corroboration: Optional[Corroboration] = None,
              partner: Optional[ProbeResult] = None) -> Evaluation:
     """Dispatch on the probe's comparison path."""
     if probe.comparison is Comparison.HARD_INVARIANT:
@@ -243,5 +237,4 @@ def evaluate(probe: Probe, *, current: Optional[ProbeResult],
         return evaluate_hard_invariant(probe, current, invariant, partner=partner)
     if obligations is None:
         raise ValueError("a PROOF_BASELINE probe requires BaselineObligations")
-    return evaluate_baseline_drift(probe, baseline, current, obligations,
-                                   corroboration=corroboration)
+    return evaluate_baseline_drift(probe, baseline, current, obligations)
