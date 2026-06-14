@@ -154,17 +154,32 @@ def _normalize_surface(surface: str) -> str:
     return _METHOD_RE.sub("", (surface or "").strip())
 
 
-def ground_surface(surface: str, samples: tuple) -> Optional[str]:
-    """Return a concrete, groundable path for a soft-assumption surface, or None
-    if it cannot ground (hallucinated). Strips a leading HTTP method; instantiates
-    a route template ({param}) to the lexicographically-first matching sample
-    (deterministic), so the appendix's natural dialect grounds."""
-    s = _normalize_surface(surface)
-    if "{" not in s:
-        return s if classify_url_pattern(s, samples) is not None else None
-    glob = re.sub(r"\{[^}]+\}", "*", s)
+def _instantiate(glob: str, samples: tuple) -> Optional[str]:
     matches = sorted(p for p in samples if fnmatchcase(p, glob))
     return matches[0] if matches else None
+
+
+def ground_surface(surface: str, samples: tuple, routes: tuple = ()) -> Optional[str]:
+    """Return a concrete, groundable path for a soft-assumption surface, or None
+    if it cannot ground (hallucinated). Tolerates the appendix dialect: strips a
+    leading HTTP method; instantiates a route TEMPLATE ({param}) to the
+    lexicographically-first matching sample; and — given `routes` (the rev's real
+    route templates) — grounds a concrete surface whose param VALUE was invented
+    (e.g. /pricing/quote/SKU-001) by matching its real route and instantiating a
+    real representative. The model names the route; the substrate grounds the id."""
+    s = _normalize_surface(surface)
+    if "{" in s:                                    # route template form
+        return _instantiate(re.sub(r"\{[^}]+\}", "*", s), samples)
+    if classify_url_pattern(s, samples) is not None:  # already a real concrete path
+        return s
+    for route in routes:                            # invented id on a real route?
+        if "{" in route:
+            glob = re.sub(r"\{[^}]+\}", "*", route)
+            if fnmatchcase(s, glob):
+                rep = _instantiate(glob, samples)
+                if rep is not None:
+                    return rep
+    return None
 
 
 class GroundingError(ValueError):
@@ -219,13 +234,15 @@ def compile_pipeline(soft_set: SoftAssumptionSet, *, world_rev: int = 1,
     """Ground → provenance-gate → attachment+lens+typing. Deterministic given the
     soft set; the LLM call already happened (compile_assumptions)."""
     samples = path_samples_for_rev(world_rev)
+    from sentinel_v2.surface_appendix import openapi_paths_for_rev
+    routes = tuple(openapi_paths_for_rev(world_rev).keys())
     # 1. appendix grounding (dialect-tolerant) — hallucinated surfaces fail LOUDLY
     #    (reuse N2 liveness). Each soft surface is normalized + grounded to a
     #    concrete path; one that cannot ground is a hallucination.
     grounded: dict[int, str] = {}
     hallucinated = []
     for idx, soft in enumerate(soft_set.assumptions, start=1):
-        g = ground_surface(soft.surface, samples)
+        g = ground_surface(soft.surface, samples, routes)
         if g is None:
             hallucinated.append(soft.surface)
         else:

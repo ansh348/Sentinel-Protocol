@@ -27,7 +27,8 @@ sys.path.insert(0, str(REPO_ROOT))
 from sentinel.compile import plan_text_from_task  # noqa: E402
 from sentinel_v2.compile_probes import compile_assumptions, ground_surface  # noqa: E402
 from sentinel_v2.pattern_liveness import path_samples_for_rev  # noqa: E402
-from sentinel_v2.surface_appendix import surface_appendix  # noqa: E402
+from sentinel_v2.surface_appendix import (openapi_paths_for_rev,  # noqa: E402
+                                          surface_appendix)
 from trace import TraceWriter  # noqa: E402
 
 # SEEN ground truth: (task, seen-injection) -> the injected surface FAMILY.
@@ -47,6 +48,7 @@ SEEN_CELLS = [
 ]
 TASKS = ["a1", "b1", "c1", "d1"]
 SAMPLES = path_samples_for_rev(1)  # SEEN-ONLY world (no held-out surface)
+ROUTES = tuple(openapi_paths_for_rev(1).keys())  # real route templates (rev 1)
 
 
 def compile_task(task_id: str, trace: TraceWriter) -> tuple[list, float]:
@@ -56,7 +58,7 @@ def compile_task(task_id: str, trace: TraceWriter) -> tuple[list, float]:
     appendix = surface_appendix(task, world_rev=1)  # SEEN-ONLY appendix (Rule Zero)
     soft, results = compile_assumptions(plan, appendix, trace)
     raw = [a.surface for a in soft.assumptions] if soft else []
-    grounded = sorted({g for g in (ground_surface(s, SAMPLES) for s in raw) if g})
+    grounded = sorted({g for g in (ground_surface(s, SAMPLES, ROUTES) for s in raw) if g})
     return grounded, round(sum(r.cost_usd for r in results), 6)
 
 

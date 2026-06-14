@@ -107,6 +107,17 @@ def test_tolerates_appendix_dialect_method_and_template():
     assert any("/repo/validate" in u["surface"] for u in result.uncovered)
 
 
+def test_grounds_an_invented_param_id_via_its_real_route():
+    """The model names the right route but invents the id (/pricing/quote/SKU-001;
+    real SKUs are WID-001/…). The substrate grounds it to a real representative
+    instead of dropping it. A truly hallucinated surface still fails loudly."""
+    ok = compile_pipeline(_set(_a("/pricing/quote/SKU-001")), world_rev=4)
+    assert len(ok.probes) == 1 and ok.probes[0].target.startswith("/pricing/quote/")
+    assert "SKU-001" not in ok.probes[0].target          # grounded to a real id
+    with pytest.raises(GroundingError):
+        compile_pipeline(_set(_a("/pricing/totally_invented")), world_rev=4)
+
+
 def test_full_seen_set_compiles_a_mix():
     soft = _set(
         _a("/pricing/quote/WID-001"),                              # structure
