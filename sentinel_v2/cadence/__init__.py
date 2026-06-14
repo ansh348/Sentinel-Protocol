@@ -14,6 +14,9 @@ from __future__ import annotations
 from sentinel_v2.cadence.accounting import (
     HELD_OUT_DENOMINATOR_IS_ESCROW_COMPUTED, CellOutcome, CoverageAccounting,
     account, is_detection_hit, is_recall_miss)
+from sentinel_v2.cadence.audit import (AuditReport, dependency_graph_audit,
+                                       two_build_replay_discriminator)
+from sentinel_v2.cadence.policy import EventGatedCadence, make_cadence_policy
 from sentinel_v2.cadence.provisional import (PROVISIONAL_WORK_AT_RISK,
                                              DependencyProof, ProvisionalRecord,
                                              can_halt_run, create_provisional,
@@ -66,4 +69,6 @@ __all__ = [
     "replan_gc",
     "CellOutcome", "CoverageAccounting", "account", "is_detection_hit",
     "is_recall_miss", "HELD_OUT_DENOMINATOR_IS_ESCROW_COMPUTED",
+    "EventGatedCadence", "make_cadence_policy",
+    "AuditReport", "dependency_graph_audit", "two_build_replay_discriminator",
 ]
