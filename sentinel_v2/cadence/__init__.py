@@ -11,6 +11,10 @@ throttle + probe-failure; C6 provisional promotion + replan GC; C7 UNCOVERED acc
 """
 from __future__ import annotations
 
+from sentinel_v2.cadence.throttle import (TRANSPORT_RETRY_BUDGET, OpenWobble,
+                                          ProbeOutcome, WobbleThrottle,
+                                          probe_with_retry, route_probe_outcome,
+                                          route_terminal_time_singleton)
 from sentinel_v2.cadence.budget import (CONFIRMATION_RESERVE_FRACTION,
                                         KG3_OVERHEAD_CAP, BudgetPlan,
                                         ConfirmationItem, CoverageItem, allocate,
@@ -47,4 +51,6 @@ __all__ = [
     "run_barrier_hierarchy", "RELATION_UNDER_EMISSION_RESIDUAL",
     "KG3_OVERHEAD_CAP", "CONFIRMATION_RESERVE_FRACTION", "clean_overhead",
     "clean_overhead_ok", "CoverageItem", "ConfirmationItem", "BudgetPlan", "allocate",
+    "WobbleThrottle", "OpenWobble", "route_terminal_time_singleton",
+    "TRANSPORT_RETRY_BUDGET", "probe_with_retry", "route_probe_outcome", "ProbeOutcome",
 ]
