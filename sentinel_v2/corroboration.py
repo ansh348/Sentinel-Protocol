@@ -232,3 +232,73 @@ def signal_from_source(probe: Probe, source: ReObservationSource, *,
     return Signal(probe=probe, observations=source.observations(probe.target),
                   baseline=baseline, obligations=obligations, invariant=invariant,
                   partner=partner)
+
+
+# -- C5: recording, replay, cost ----------------------------------------------
+#
+# The corroboration path is fully DETERMINISTIC ($0 LLM): the decision is a pure
+# function of the observation sequence. Decisions are written to the trace so a
+# run is byte-replayable; replay reads them back and reconstructs the exact same
+# invalidations with NO recomputation and NO model call.
+
+def _json_safe(v: Any) -> Any:
+    """Coerce a witness to a JSON-stable form (witness is diagnostic, never
+    load-bearing). Scalars/lists/dicts pass through; anything else becomes str."""
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    if isinstance(v, (list, tuple)):
+        return [_json_safe(x) for x in v]
+    if isinstance(v, dict):
+        return {str(k): _json_safe(x) for k, x in v.items()}
+    return str(v)
+
+
+def invalidation_to_dict(inv: CorroboratedInvalidation) -> dict:
+    """A stable, JSON-serializable view of one corroborated invalidation."""
+    return {"target": inv.target, "grade": inv.grade.value,
+            "fault_shape": inv.fault_shape, "evidence_class": inv.evidence_class,
+            "reason": inv.reason,
+            "persistence": inv.persistence.value if inv.persistence else None,
+            "witness": _json_safe(inv.witness)}
+
+
+def invalidation_from_dict(d: dict) -> CorroboratedInvalidation:
+    return CorroboratedInvalidation(
+        target=d["target"], grade=Grade(d["grade"]),
+        fault_shape=d["fault_shape"], evidence_class=d["evidence_class"],
+        reason=d["reason"],
+        persistence=(PersistenceDecision(d["persistence"])
+                     if d.get("persistence") else None),
+        witness=d.get("witness"))
+
+
+def corroboration_summary(invalidations: Sequence[CorroboratedInvalidation]) -> dict:
+    return {"layer": "v2_corroboration",
+            "invalidations": [invalidation_to_dict(i) for i in invalidations]}
+
+
+def record_corroboration(trace, invalidations: Sequence[CorroboratedInvalidation],
+                         *, cost_usd: float = 0.0) -> dict:
+    """Write the corroboration decisions into the run trace as a `corroboration`
+    event. `cost_usd` is 0.0 by construction — there is no LLM on this path."""
+    payload = {**corroboration_summary(invalidations), "cost_usd": cost_usd}
+    trace.emit(actor="sentinel_v2", event_type="corroboration", payload=payload)
+    return payload
+
+
+def read_recorded_corroboration(events: Iterable[dict]
+                                ) -> list[CorroboratedInvalidation]:
+    """Recover the recorded invalidations from a trace (the last v2_corroboration
+    event — keep-not-flush replans append later decisions)."""
+    recorded = [e for e in events if e.get("event_type") == "corroboration"
+                and (e.get("payload") or {}).get("layer") == "v2_corroboration"]
+    if not recorded:
+        return []
+    return [invalidation_from_dict(d)
+            for d in recorded[-1]["payload"]["invalidations"]]
+
+
+def replay_corroboration(events: Iterable[dict]) -> list[CorroboratedInvalidation]:
+    """Reconstruct the corroboration decisions from the recorded trace — no
+    recomputation, no LLM. Byte-identical to what was recorded."""
+    return read_recorded_corroboration(events)

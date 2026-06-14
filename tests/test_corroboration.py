@@ -8,7 +8,10 @@ from sentinel_v2.corroboration import (PRE_COMPLETION_SWEEP_DEPENDENCY,
                                        CorroboratedInvalidation, Grade,
                                        PersistenceDecision, Signal,
                                        TraceReObservations, corroborate,
-                                       corroborate_signal, decide_persistence,
+                                       corroborate_signal, corroboration_summary,
+                                       decide_persistence, invalidation_to_dict,
+                                       read_recorded_corroboration,
+                                       record_corroboration, replay_corroboration,
                                        signal_from_source)
 from sentinel_v2.probe_spec import (CadenceHint, Comparison, CostClass,
                                     EvidenceClass, FaultShape, Lens, LensOp,
@@ -351,3 +354,77 @@ def test_persistence_decision_is_count_invariant():
     assert {decide_persistence([True] * n) for n in range(2, 200)} == {P}
     assert {decide_persistence([True, False] * n) for n in range(1, 200)} == {T}
     assert decide_persistence([True]) is T
+
+
+# == C5: recording, replay, cost ===============================================
+
+def _confirmed_set():
+    """One caution (persisted shapeless drift) + one interrupt (status fast path)."""
+    base = R({"content": "original"})
+    caution = Signal(probe=_hash_probe("/docs/passages/pol-returns"), baseline=base,
+                     observations=[R({"content": "rewritten"}),
+                                   R({"content": "still rewritten"})],
+                     obligations=_obl())
+    status = Signal(
+        probe=_probe(FaultShape.STATUS_CLASS, Comparison.HARD_INVARIANT,
+                     Lens(op=LensOp.STATUS_READ), target="/auth/validate",
+                     evidence_class=EvidenceClass.STATUS_CODED),
+        observations=[R({}, status=401)], invariant=Invariant(status_in=(200,)))
+    return corroborate([caution, status])
+
+
+def test_corroboration_decisions_recorded_and_replayed_byte_identical(tmp_path):
+    import json
+    from trace import TraceWriter, read_trace
+    invs = _confirmed_set()
+    assert len(invs) == 2
+    path = tmp_path / "corr.jsonl"
+    tw = TraceWriter(path, run_id="r1", seed=1, system="test", task_id="t0")
+    payload = record_corroboration(tw, invs)
+    tw.close()
+
+    replayed = replay_corroboration(read_trace(path))
+    # reconstructed objects re-serialize byte-identically to the recorded payload
+    assert [invalidation_to_dict(i) for i in replayed] == payload["invalidations"]
+    assert json.dumps([invalidation_to_dict(i) for i in replayed], sort_keys=True) \
+        == json.dumps(payload["invalidations"], sort_keys=True)
+    # grades + persistence survive the round trip
+    by_target = {i.target: i for i in replayed}
+    assert by_target["/auth/validate"].grade is Grade.INTERRUPT
+    assert by_target["/docs/passages/pol-returns"].grade is Grade.CAUTION
+    assert by_target["/docs/passages/pol-returns"].persistence is PersistenceDecision.PROMOTE
+
+
+def test_read_recorded_corroboration_takes_the_last_set(tmp_path):
+    """Keep-not-flush replans append later decision sets; the reader takes the last."""
+    from trace import TraceWriter, read_trace
+    path = tmp_path / "corr2.jsonl"
+    tw = TraceWriter(path, run_id="r2", seed=1, system="test", task_id="t0")
+    record_corroboration(tw, [])                       # first compile: nothing routed
+    record_corroboration(tw, _confirmed_set())         # after a replan: two routed
+    tw.close()
+    assert len(read_recorded_corroboration(read_trace(path))) == 2
+
+
+def test_layer_is_deterministic_same_inputs_same_bytes():
+    import json
+    base = R({"content": "original"})
+    sig = Signal(probe=_hash_probe("/docs/passages/pol-returns"), baseline=base,
+                 observations=[R({"content": "x"}), R({"content": "y"})],
+                 obligations=_obl())
+    a = corroboration_summary(corroborate([sig]))
+    b = corroboration_summary(corroborate([sig]))
+    assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def test_corroboration_path_spends_no_llm(tmp_path):
+    import inspect
+
+    import sentinel_v2.corroboration as c
+    from trace import TraceWriter
+    src = inspect.getsource(c)
+    assert "run_claude" not in src and "COMPILE_MODEL" not in src
+    tw = TraceWriter(tmp_path / "z.jsonl", run_id="r", seed=1, system="t", task_id="t0")
+    payload = record_corroboration(tw, _confirmed_set())
+    tw.close()
+    assert payload["cost_usd"] == 0.0

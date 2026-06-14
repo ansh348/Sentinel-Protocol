@@ -66,6 +66,10 @@ EVENT_TYPES = frozenset({
     # Emitted only on probe_channel-enabled (1b) runs; banked traces have none.
     "probe_call",
     "probe_response",
+    # v2 corroboration layer (design §2.2; ruling D28): the persistence decision
+    # for each surface, recorded so a run is byte-replayable. Deterministic, no
+    # LLM. Emitted only under the v2 flag; banked Phase-1 traces have none.
+    "corroboration",
 })
 
 USAGE_FIELDS = ("input_tokens", "output_tokens", "cost_usd", "model", "session_id")
