@@ -11,6 +11,9 @@ throttle + probe-failure; C6 provisional promotion + replan GC; C7 UNCOVERED acc
 """
 from __future__ import annotations
 
+from sentinel_v2.cadence.accounting import (
+    HELD_OUT_DENOMINATOR_IS_ESCROW_COMPUTED, CellOutcome, CoverageAccounting,
+    account, is_detection_hit, is_recall_miss)
 from sentinel_v2.cadence.provisional import (PROVISIONAL_WORK_AT_RISK,
                                              DependencyProof, ProvisionalRecord,
                                              can_halt_run, create_provisional,
@@ -61,4 +64,6 @@ __all__ = [
     "PROVISIONAL_WORK_AT_RISK", "ProvisionalRecord", "create_provisional",
     "earns_paired_reserve", "can_halt_run", "promote_to_blocking", "DependencyProof",
     "replan_gc",
+    "CellOutcome", "CoverageAccounting", "account", "is_detection_hit",
+    "is_recall_miss", "HELD_OUT_DENOMINATOR_IS_ESCROW_COMPUTED",
 ]
