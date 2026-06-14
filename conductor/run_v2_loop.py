@@ -1,0 +1,253 @@
+"""V2 run loop — the REAL matrix detection path (decision_memo_phase1 P3; D28/D29).
+
+A `V2Conductor` reuses the v1 conductor's world / plan / worker / aggregate machinery
+but replaces the v1 tripwire+judge detection with the v2 stack: a category-blind v2
+compile (probes), and at each WORKER BARRIER (a worker returning its payload) the
+cadence fires probes for that worker's surfaces on the SAME world instance with the
+worker's own token, harvests the worker's reads through the §8 equivalence gate for
+clean baselines, and runs corroboration. A corroborated INTERRUPT routes to a real
+replan (recompile + redispatch). This is the path the one-shot matrix uses — NOT the
+arm-smoke direct-harvest shortcut.
+
+Same world-instance + token discipline: probes fire against this run's world subprocess
+and re-use the most-recently-observed bearer token from the trace, so a cross-instance
+token can never manufacture a 401 false positive (the bug the smoke hit and fixed).
+DETERMINISTIC detection path ($0 LLM beyond the compile/plan/worker calls the run makes).
+"""
+from __future__ import annotations
+
+from concurrent.futures import FIRST_COMPLETED, Future, wait
+from typing import Optional
+
+import httpx
+
+from conductor.run_one import Conductor, Dismiss, PlanStep, RunAbort
+from conductor.systems import SystemConfig
+from sentinel_v2.arms import run_v2_detection
+from sentinel_v2.compile_probes import compile_assumptions, compile_pipeline
+from sentinel_v2.corroboration import Grade
+from sentinel_v2.probes import ProbeResult
+
+V2_SYSTEM = SystemConfig(
+    "V2", "v2 stack: compile + corroboration + cadence (two-tier, no judge)",
+    tripwires_enabled=True,        # triggers compile_and_arm (overridden to v2) + replan recompile
+    judge_enabled=False, escalate_any_anomaly=False, revalidation_every_k=None)
+V2J_SYSTEM = SystemConfig(
+    "V2J", "v2 stack with the rebuilt judge tier (exploratory)",
+    tripwires_enabled=True, judge_enabled=False,   # the v2 'judge' is corroboration, not the v1 judge
+    escalate_any_anomaly=False, revalidation_every_k=None)
+
+
+class V2Conductor(Conductor):
+    def __init__(self, *, judge: bool = False, **kwargs) -> None:
+        super().__init__(system_config=(V2J_SYSTEM if judge else V2_SYSTEM),
+                         probe_channel=True, **kwargs)
+        self._judge = judge
+        self.v2_probes: list = []
+        self.v2_baselines: dict = {}          # surface -> earliest clean §8 read (the baseline)
+        self.v2_invalidations: list = []      # DISTINCT corroborated invalidations (deduped)
+        self.v2_query: dict = {}              # surface -> the worker's query (§8 same projection)
+        self.v2_interrupted_surfaces: set = set()   # D29 wobble dedup: one open per surface
+        self.v2_coalesced = 0                 # re-detections of an already-open surface
+        self.v2_interrupts = 0                # INTERRUPT-grade invalidations that replanned
+
+    # -- v2 compile replaces the v1 tripwire compile/arm ----------------------
+    def compile_and_arm(self) -> None:
+        soft, sessions = compile_assumptions(self.plan_text(), self.task_context,
+                                             self.trace, isolated_home=self.session_home)
+        self.all_calls.extend(sessions)
+        if soft is None:
+            raise RunAbort("compile_failed", "v2 compile produced no soft set")
+        cr = compile_pipeline(soft, world_rev=int(self.task.get("world_rev", 1)))
+        # keep-not-flush (D2/D29): keep prior probes, add new ones (dedup by target)
+        by_target = {p.target: p for p in self.v2_probes}
+        for p in cr.probes:
+            by_target[p.target] = p
+        self.v2_probes = list(by_target.values())
+        self.trace.emit(actor="sentinel_v2", event_type="tripwire_set",
+                        payload={"layer": "v2_probes", "plan_id": soft.plan_id,
+                                 "revision": self.plan.revision,
+                                 "count": len(self.v2_probes),
+                                 "targets": [p.target for p in self.v2_probes]})
+
+    # -- drain with the v2 worker barrier -------------------------------------
+    def drain(self, executor, pending: dict[Future, str]) -> None:
+        while pending:
+            done, _ = wait(list(pending), return_when=FIRST_COMPLETED)
+            for future in done:
+                instance_id = pending.pop(future)
+                outcome = future.result()
+                self.outcomes[instance_id] = outcome
+                self._v2_worker_barrier(outcome, executor, pending)
+
+    def _last_observed_token(self) -> Optional[str]:
+        """Re-use the most recently observed bearer token (E.2) from the world trace,
+        so probes carry the worker's own principal on the SAME world instance."""
+        from trace import read_trace
+        wt = self.run_dir / "trace_world.jsonl"
+        if not wt.exists():
+            return None
+        token = None
+        for e in read_trace(wt):
+            if e["event_type"] == "tool_response":
+                body = e["payload"].get("body")
+                if isinstance(body, dict) and isinstance(body.get("token"), str):
+                    token = body["token"]
+        return token
+
+    def _harvest_into_baselines(self) -> None:
+        """Harvest worker reads from the world trace through the §8 equivalence gate;
+        the earliest clean (status<400, region-present) read of each watched surface is
+        its baseline. This is the worker-view coverage the matcher consumes."""
+        from trace import read_trace
+        from sentinel_v2.cadence.harvest import WorkerRead, harvest_equivalence
+        wt = self.run_dir / "trace_world.jsonl"
+        if not wt.exists():
+            return
+        targets = {p.target: p for p in self.v2_probes}
+        calls: dict = {}
+        for e in read_trace(wt):
+            et, p = e["event_type"], e["payload"]
+            if et == "tool_call":
+                calls[p.get("counter")] = (e.get("actor", "unknown"),
+                                           p.get("method", "GET"), p.get("path", ""),
+                                           p.get("query", ""))
+            elif et == "tool_response":
+                c = p.get("counter")
+                if c not in calls:
+                    continue
+                actor, method, path, query = calls[c]
+                probe = targets.get(path)
+                if probe is None or path in self.v2_baselines:
+                    continue
+                status = p.get("status")
+                if status is None or status >= 400:
+                    continue                    # a baseline must be a clean read
+                result = ProbeResult(method=method, path=path, status=status,
+                                     headers={}, body=p.get("body"))
+                read = WorkerRead(surface_id=path, method=method, auth_principal=actor,
+                                  cache_state="fresh", raw_captured_pre_transform=True,
+                                  result=result)
+                if harvest_equivalence(read, expected_surface=path, lens=probe.lens,
+                                       expected_principal=actor).ok:
+                    self.v2_baselines[path] = result
+                    # §8 same projection: the probe must replay the worker's query
+                    self.v2_query[path] = query
+
+    def _worker_surfaces(self, outcome) -> set:
+        """The probe surfaces this worker actually touched (its output-dependency
+        surfaces). Falls back to the full probe set if the trace shows none yet."""
+        from trace import read_trace
+        wt = self.run_dir / "trace_world.jsonl"
+        targets = {p.target for p in self.v2_probes}
+        touched = set()
+        if wt.exists():
+            for e in read_trace(wt):
+                if (e["event_type"] == "tool_call"
+                        and e.get("actor") == outcome.instance_id
+                        and e["payload"].get("path") in targets):
+                    touched.add(e["payload"]["path"])
+        return touched or targets
+
+    def _v2_worker_barrier(self, outcome, executor, pending) -> None:
+        if not self.v2_probes:
+            return
+        self._harvest_into_baselines()
+        barrier_probes = [p for p in self.v2_probes
+                          if p.target in self._worker_surfaces(outcome)]
+        if not barrier_probes:
+            return
+        token = self._last_observed_token()
+        client = httpx.Client(base_url=self.base_url, timeout=10)
+        try:
+            det = run_v2_detection(barrier_probes, client, auth_token=token,
+                                   baselines=self.v2_baselines, queries=self.v2_query,
+                                   judge=self._judge)
+        except Exception as exc:                 # a barrier fault never crashes the run
+            self.trace.emit(actor="sentinel_v2", event_type="error",
+                            payload={"where": "v2_barrier", "detail": str(exc)[:200]})
+            return
+        finally:
+            client.close()
+
+        invs = det["invalidations"]
+        try:
+            counter = self._admin("GET", "/admin/state").json().get("counter")
+        except Exception:
+            counter = None
+        # D29 wobble dedup: one open wobble per surface. A re-detection of an
+        # already-open surface (a sustained 404 seen at every later barrier) coalesces
+        # into the existing incident — logged as a suppressed_refire, never a new
+        # interrupt or replan. This is what keeps a sustained violation from flooding.
+        new = [i for i in invs if i.target not in self.v2_interrupted_surfaces]
+        for inv in invs:
+            if inv.target in self.v2_interrupted_surfaces:
+                self.v2_coalesced += 1
+                self.trace.emit(actor="sentinel_v2", event_type="suppressed_refire",
+                                payload={"where": "v2_cadence",
+                                         "tripwire_id": f"v2_probe::{inv.target}",
+                                         "target": inv.target, "counter": counter})
+        for inv in new:
+            self.v2_invalidations.append(inv)
+            self.v2_interrupted_surfaces.add(inv.target)
+            # an escalation carrying the surface (_path) makes the interrupt
+            # attributable to the injection for the M6 instrument (metrics §0)
+            self.trace.emit(actor="sentinel_v2", event_type="escalation",
+                            payload={"tripwire_id": f"v2_probe::{inv.target}",
+                                     "evidence": {"_path": inv.target,
+                                                  "grade": inv.grade.value},
+                                     "subplan_id": outcome.subplan_id,
+                                     "counter": counter})
+        interrupts = [i for i in new if i.grade is Grade.INTERRUPT]
+        if interrupts and self.replans_done < self.max_replans:
+            self._v2_replan(interrupts[0], outcome, executor, pending)
+
+    def _v2_replan(self, inv, outcome, executor, pending) -> None:
+        paused = self.pause_workers("global", [], outcome.instance_id)
+        payload = {
+            "tripwire": {"id": f"v2_probe::{inv.target}", "target": inv.target,
+                         "scope": "global"},
+            "verdict": {"grade": inv.grade.value, "reason": inv.reason},
+            "evidence": {"_path": inv.target},
+            "workers": [{"worker_id": o.instance_id, "subplan_id": o.subplan_id,
+                         "status": o.status} for o in self.outcomes.values()],
+            "paused_workers": paused,
+            "completed_results": self._completed_results(),
+        }
+        reply = self.replan(payload)             # emits the `interrupt` event
+        self.v2_interrupts += 1
+        if isinstance(reply, Dismiss):
+            base = outcome.instance_id.split("r")[0]
+            self._admin("POST", "/admin/clear_tripped",
+                        json={"worker_ids": [outcome.instance_id, base, "unknown"]})
+            self.wave += 1
+            self.dispatch(executor, [PlanStep(subplan_id=outcome.subplan_id,
+                                              worker_id=base,
+                                              subtask=self._subtask_of(outcome.subplan_id))],
+                          pending)
+            return
+        self.replans_done += 1
+        self.compile_and_arm()                   # recompile v2 probes for the revised plan
+        self.wave += 1
+        self.trace.emit(actor="conductor", event_type="redispatch",
+                        payload={"after": "v2_replan", "wave": self.wave,
+                                 "revision": self.plan.revision,
+                                 "steps": [s.model_dump() for s in self.plan.steps]})
+        self.dispatch(executor, self.plan.steps, pending)
+
+
+def run_v2_loop(*, task_path, injection=None, n_inject=None, seed=1,
+                runs_root="runs", judge=False, max_replans=2) -> dict:
+    """Run one cell through the real v2 loop and return the run summary (+ the
+    conductor for v2-state inspection)."""
+    cond = V2Conductor(task_path=task_path, injection=injection, n_inject=n_inject,
+                       seed=seed, runs_root=runs_root, judge=judge,
+                       max_replans=max_replans)
+    summary = cond.run()
+    summary["v2_invalidations"] = len(cond.v2_invalidations)
+    summary["v2_interrupts"] = cond.v2_interrupts
+    summary["v2_coalesced"] = cond.v2_coalesced
+    summary["v2_grades"] = [i.grade.value for i in cond.v2_invalidations]
+    summary["v2_targets"] = [i.target for i in cond.v2_invalidations]
+    summary["run_dir"] = str(cond.run_dir)
+    return summary

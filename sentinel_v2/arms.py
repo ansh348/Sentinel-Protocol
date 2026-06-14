@@ -26,7 +26,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from sentinel_v2.corroboration import Signal, corroborate
+from sentinel_v2.corroboration import (CorroboratedInvalidation, Grade, Signal,
+                                       corroborate)
 from sentinel_v2.flags import v2_enabled
 from sentinel_v2.probe_spec import Comparison, FaultShape
 from sentinel_v2.probes import ProbeExecutor
@@ -41,6 +42,11 @@ S1, S2, S3 = "S1", "S2", "S3"
 PRIMARY_ARM = TWO_TIER
 EXPLORATORY_ARMS = (REBUILT_JUDGE,)
 BASELINE_ARMS = (S1, S2, S3)
+
+# Request-malformation status codes (§8 / harvest): a 4xx here is about the HTTP
+# request (e.g. a GET probe to a POST-only endpoint -> 405), not a surface state
+# change, so it never trips the status fast path.
+_REQUEST_MALFORMATION_STATUS = frozenset({400, 405, 422})
 
 
 @dataclass(frozen=True)
@@ -105,8 +111,9 @@ class ArmResult:
     ttd_tool_calls: Optional[int] = None
     false_interrupts: Optional[int] = None
     fir: Optional[float] = None
+    replans: Optional[int] = None
     success: Optional[bool] = None
-    source: str = ""                       # "conductor" | "v2_detection"
+    source: str = ""                       # "conductor" | "v2_detection" | "v2_runloop"
     grades: list[str] = field(default_factory=list)
 
     def well_formed(self) -> bool:
@@ -155,18 +162,44 @@ def _signal_for(probe, observations, baseline) -> Signal:
 
 
 def run_v2_detection(probes, client, *, auth_token: Optional[str] = None,
-                     baselines: Optional[dict] = None, judge: bool = False) -> dict:
+                     baselines: Optional[dict] = None, queries: Optional[dict] = None,
+                     judge: bool = False) -> dict:
     """Execute the v2 detection: probe each surface (first look + one re-look) on the
     live side channel and run corroboration. Returns the detection seam — deterministic,
-    $0 LLM. `judge=True` (V2J) routes invalidations through the exploratory judge tier
-    (a pass-through seam here; the rebuilt judge is exploratory and not implemented)."""
+    $0 LLM. `queries` maps surface -> the worker's observed query string, so the probe
+    replays the SAME projection the worker saw (§8 same-projection; without it a GET that
+    omits a required query, e.g. ?dest=, observes a different view and false-positives).
+    `judge=True` (V2J) routes invalidations through the exploratory judge tier (a
+    pass-through seam here; the rebuilt judge is exploratory and not implemented)."""
+    from urllib.parse import parse_qsl
     ex = ProbeExecutor(client, auth_token=auth_token)
     baselines = baselines or {}
-    signals = [
-        _signal_for(p, [ex.get(p.target), ex.get(p.target)], baselines.get(p.target))
-        for p in probes
-    ]
-    invalidations = corroborate(signals)
+    queries = queries or {}
+    invalidations = []
+    signals = []
+    for p in probes:
+        q = queries.get(p.target)
+        params = dict(parse_qsl(q)) if q else None
+        obs = [ex.get(p.target, params=params),         # first look + one confirming re-look
+               ex.get(p.target, params=params)]
+        # STATUS FAST PATH (D28/D29 §5.3): a well-formed status >= 400 on a trusted
+        # surface is a status-coded interrupt on its own — regardless of the probe's
+        # declared shape, and with NO baseline required (a removed surface 404, a token
+        # 401). REQUEST-MALFORMATION codes (400/405/422) are EXCLUDED per §8: e.g. a GET
+        # probe to a POST-only endpoint returns 405 — that belongs to the request, not the
+        # surface, and must never trip the fast path (it is not a surface state change).
+        status_hit = next((o for o in obs if o.status is not None and o.status >= 400
+                           and o.status not in _REQUEST_MALFORMATION_STATUS), None)
+        if status_hit is not None:
+            invalidations.append(CorroboratedInvalidation(
+                target=p.target, grade=Grade.INTERRUPT,
+                fault_shape=FaultShape.STATUS_CLASS.value,
+                evidence_class=p.evidence_class.value,
+                reason=f"status {status_hit.status} on a trusted surface (status fast path)",
+                witness=status_hit.status))
+            continue
+        signals.append(_signal_for(p, obs, baselines.get(p.target)))
+    invalidations.extend(corroborate(signals))
     if judge:
         invalidations = _exploratory_judge(invalidations)
     return {"detected": bool(invalidations), "n_interrupts": len(invalidations),
@@ -190,3 +223,39 @@ def v2_result(arm_id: str, detection: dict, *, total_cost_usd: float = 0.0,
         n_interrupts=detection["n_interrupts"], total_cost_usd=total_cost_usd,
         ttd_tool_calls=ttd_tool_calls, success=success, source="v2_detection",
         grades=list(detection["grades"]))
+
+
+# -- the matrix-runner dispatch (the REAL path) --------------------------------
+#
+# Baselines run through the v1 conductor (the proven Phase-1 runner); v2 arms run the
+# real v2 loop (cadence barriers firing probes mid-run + §8 harvest). Result collection
+# is uniform via the M6 metrics instrument; for v2 the corroboration-based detection is
+# also surfaced as a cross-check. Lazy imports keep arms <-> run_v2_loop acyclic.
+
+def dispatch(arm_id: str, *, task_path, injection=None, n_inject=None, seed: int = 1,
+             runs_root="runs", max_replans: int = 2,
+             heartbeat_k: Optional[int] = None) -> ArmResult:
+    """Run one cell on one arm through the actual matrix-runner path and collect a
+    normalized ArmResult. Caller supplies only SEEN cells (this function never reads or
+    loads a held-out cell)."""
+    spec = resolve_arm(arm_id)
+    if spec.is_v2:
+        from conductor.run_v2_loop import V2Conductor
+        cond = V2Conductor(task_path=task_path, injection=injection, n_inject=n_inject,
+                           seed=seed, runs_root=runs_root, judge=spec.judge,
+                           max_replans=max_replans)
+        summary = cond.run()
+        res = collect_arm_result(cond.run_dir, arm_id)        # M6 instrument (parity)
+        res.source = "v2_runloop"
+        res.total_cost_usd = summary["cost_usd"]
+        res.replans = cond.replans_done
+        res.grades = [i.grade.value for i in cond.v2_invalidations]
+        # the v2 corroboration is the path's own ground truth; surface it as a cross-check
+        v2_interrupts = [i for i in cond.v2_invalidations if i.grade.value == "interrupt"]
+        res.detected = bool(v2_interrupts) or res.detected
+        return res
+    from conductor.run_one import run_one
+    summary = run_one(task_path=task_path, system_id=spec.id, injection=injection,
+                      n_inject=n_inject, seed=seed, runs_root=runs_root,
+                      max_replans=max_replans, heartbeat_k=heartbeat_k)
+    return collect_arm_result(summary["run_dir"], arm_id)

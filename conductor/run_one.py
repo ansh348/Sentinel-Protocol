@@ -321,19 +321,28 @@ def _load_checker(checker_rel: str):
 
 
 class Conductor:
-    def __init__(self, *, task_path: str | Path, system_id: str,
+    def __init__(self, *, task_path: str | Path, system_id: Optional[str] = None,
+                 system_config: Optional[SystemConfig] = None,
                  injection: Optional[str] = None, n_inject: Optional[int] = None,
                  seed: int = 1, runs_root: str | Path = "runs",
                  max_replans: int = 2,
                  max_escalations: int = MAX_ESCALATIONS,
                  heartbeat_k: Optional[int] = None,
                  heartbeat_calibration: Optional[dict] = None,
-                 injection_params: Optional[dict] = None) -> None:
+                 injection_params: Optional[dict] = None,
+                 probe_channel: bool = False) -> None:
         self.task = yaml.safe_load(Path(task_path).read_text(encoding="utf-8"))
         # production-fidelity context (D6): lean yaml context + the mechanical
         # surface appendix; used for both orchestrator and sentinel compiles
         self.task_context = enriched_context(self.task)
-        self.system: SystemConfig = SYSTEMS[system_id]
+        # A baseline passes system_id (the SYSTEMS table); the v2 run loop injects a
+        # SystemConfig directly (the v2 arms are not v1 SYSTEMS entries). Backward-
+        # compatible: with system_config=None the lookup is exactly as before.
+        self.system: SystemConfig = (system_config if system_config is not None
+                                     else SYSTEMS[system_id])
+        # The probe side channel is enabled only for v2 runs; baselines keep it off so
+        # the world config is byte-identical to Phase 1.
+        self.probe_channel = probe_channel
         self.injection_name = injection
         self.n_inject = n_inject
         # Per-cell escrow overrides (prereg_1b: the loader applies sealed
@@ -350,7 +359,7 @@ class Conductor:
         self._next_reval_mark = heartbeat_k if heartbeat_k else None
 
         label = injection or "clean"
-        base_id = f"{self.task['id']}-{system_id}-{label}-s{seed}"
+        base_id = f"{self.task['id']}-{self.system.id}-{label}-s{seed}"
         self.run_dir = Path(runs_root) / base_id
         suffix = 1
         while self.run_dir.exists():
@@ -360,7 +369,7 @@ class Conductor:
         self.run_dir.mkdir(parents=True)
 
         self.trace = TraceWriter(self.run_dir / "trace.jsonl", run_id=self.run_id,
-                                 seed=seed, system=system_id,
+                                 seed=seed, system=self.system.id,
                                  task_id=self.task["id"])
         # ONE isolated home for the whole run: the orchestrator's --resume
         # turns need their session state to persist across invocations (a
@@ -414,7 +423,10 @@ class Conductor:
                            # rev 2 = held-out-category surface; rev 1 (the
                            # frozen Phase 1 world) is the default so banked
                            # configs and legacy tasks replay byte-identically
-                           world_rev=int(self.task.get("world_rev", 1)))
+                           world_rev=int(self.task.get("world_rev", 1)),
+                           # off for baselines (byte-identical world config); the v2
+                           # run loop enables the perturbation-isolated probe channel
+                           probe_channel=self.probe_channel)
         cfg_path = self.run_dir / "world_config.json"
         cfg_path.write_text(config.model_dump_json(), encoding="utf-8")
         log = open(self.run_dir / "world_server.log", "w", encoding="utf-8")
