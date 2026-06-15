@@ -163,3 +163,48 @@ def test_probe_audit_sample_is_deterministic(tmp_path):
     a = MG.gate_1bKG1(MG.load_ledger(_ledger(tmp_path, rows)), audit={})["probe_validity"]["sample"]
     b = MG.gate_1bKG1(MG.load_ledger(_ledger(tmp_path, rows)), audit={})["probe_validity"]["sample"]
     assert a == b and len(a) == 2                          # ceil(0.20 * 10), seed 1102 fixed
+
+
+# -- P2/P3: pinned pre-detection + trace-computed replay / cap-grind ------------
+
+def test_pre_detection_pinned_not_pending(tmp_path):
+    # P2: pre-detection is a PINNED definition (per-cell false_interrupts, conservative
+    # upper bound), never PENDING. Low -> PASS; high -> FAIL.
+    lo = MG.gate_1bKG2(MG.load_ledger(_ledger(tmp_path, [_rec("V2", fi=1)])), audit={})
+    hi = MG.gate_1bKG2(MG.load_ledger(_ledger(tmp_path, [_rec("V2", fi=5)])), audit={})
+    assert lo["pre_detection"]["status"] == "PASS"
+    assert hi["pre_detection"]["status"] == "FAIL"
+    assert "false_interrupts" in lo["pre_detection"]["definition"]
+
+
+def _synth_run(dirp, *, system, injected, reason):
+    dirp.mkdir(parents=True, exist_ok=True)
+    ev = [{"event_type": "run_start", "actor": "conductor", "payload": {"system": system}}]
+    if injected:
+        ev.append({"event_type": "injection_fired", "actor": "world", "payload": {"counter": 6}})
+    ev.append({"event_type": "run_end", "actor": "conductor", "payload": {"reason": reason}})
+    (dirp / "trace.jsonl").write_text("\n".join(json.dumps(e) for e in ev), encoding="utf-8")
+
+
+def test_clean_cap_grinds_counts_escalation_loop(tmp_path):
+    # #4 wired from traces: a clean V2 run that hit the escalation cap counts; a healthy
+    # clean run does not; an injected run is skipped (not a clean cell).
+    _synth_run(tmp_path / "a1-V2-clean-s1", system="V2", injected=False, reason="escalation_loop")
+    _synth_run(tmp_path / "a1-V2-clean-s2", system="V2", injected=False, reason="aggregated")
+    _synth_run(tmp_path / "a1-V2-endpoint_404-s1", system="V2", injected=True, reason="escalation_loop")
+    g = MG.clean_cap_grinds(tmp_path)
+    assert g["count"] == 1 and g["n_clean_runs_scanned"] == 2
+    assert "MAX_ESCALATIONS" in g["cite"]
+
+
+def test_replay_run_dir_none_without_world_trace(tmp_path):
+    d = tmp_path / "r"; d.mkdir()
+    (d / "trace.jsonl").write_text("", encoding="utf-8")
+    assert MG.replay_run_dir(d) is None                    # no replayable world trace
+
+
+def test_compute_gates_accepts_runs_root_and_survives_empty(tmp_path):
+    rows = [_rec("V2", detected=True), _rec("V2", kind="matrix-clean", inj=None,
+                                            cat=None, rc=None, detected=False, ttd=None)]
+    rep = MG.compute_gates(_ledger(tmp_path, rows), runs_root=str(tmp_path / "no_runs"))
+    assert rep["verdict"] in ("PASS", "FAIL", "PENDING (human-audit / precondition inputs owed)")

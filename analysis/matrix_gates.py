@@ -251,20 +251,24 @@ def gate_1bKG2(rows, audit: dict) -> dict:
     median_fir = _median(clean_fir)
     p95_fir = _p95(clean_fir)
     max_false = max(clean_false_counts) if clean_false_counts else 0
-    # injected pre-detection false-interrupt budget: median <= 2 before first detection.
-    # The seal-safe ledger records per-cell false_interrupts; the precise "before first
-    # detection" window is a trace quantity — use false_interrupts as the upper proxy and
-    # SURFACE the windowed audit if the trace-derived value is supplied.
-    inj_pre = (audit or {}).get("injected_pre_detection_false")  # list or None
-    if inj_pre is None:
-        inj_false = [int(r["result"].get("false_interrupts") or 0) for r in _injected(v2)]
-        pre_detection = {"status": "PROXY", "median_false_interrupts": _median(inj_false),
-                         "note": "median of per-cell false_interrupts as an upper proxy; "
-                                 "the windowed 'before first detection' value is a trace "
-                                 "quantity — supply audit['injected_pre_detection_false']"}
-    else:
-        pre_detection = {"status": "AUDITED", "median": _median(inj_pre),
-                         "meets_2": (_median(inj_pre) is not None and _median(inj_pre) <= 2)}
+    # injected pre-detection false-interrupt budget: median <= 2 before first detection
+    # (prereg_1b.md §2, 1bKG2: "Pre-detection false-interrupt budget on injected cells:
+    # median <= 2 before first true detection"). PINNED DEFINITION (P2): the per-cell
+    # `false_interrupts` count is the pre-detection value, used as a CONSERVATIVE UPPER
+    # BOUND — every cell's full false-interrupt count is >= the count that fell strictly
+    # before its first detection, so passing on this bound passes on the windowed value
+    # a fortiori; it can only over-count, never let a violation through. An explicit
+    # tighter trace-windowed measure may override via audit['injected_pre_detection_false'].
+    override = (audit or {}).get("injected_pre_detection_false")  # optional tighter list
+    inj_false = (override if override is not None
+                 else [int(r["result"].get("false_interrupts") or 0) for r in _injected(v2)])
+    median_pre = _median(inj_false)
+    pre_detection = {"status": ("PASS" if (median_pre is not None and median_pre <= 2)
+                                else "FAIL" if median_pre is not None else "PENDING"),
+                     "median_false_interrupts": median_pre, "cap": 2,
+                     "definition": ("audited windowed value" if override is not None else
+                                    "per-cell false_interrupts (conservative upper bound, P2)"),
+                     "cite": "prereg_1b.md §2 (1bKG2 pre-detection median <= 2)"}
     # escalation-cap grinds on clean cells (hard, zero). Not a ledger field — surfaced.
     grinds = (audit or {}).get("clean_escalation_cap_grinds")
     grind_component = {"status": ("PASS" if grinds == 0 else "FAIL" if isinstance(grinds, int)
@@ -285,10 +289,10 @@ def gate_1bKG2(rows, audit: dict) -> dict:
 
     caps_pass = (median_fir == 0 and (p95_fir is None or p95_fir <= 1) and max_false <= 3)
     pending = (grind_component["status"].startswith("PENDING")
-               or success_floor is None)
+               or pre_detection["status"] == "PENDING" or success_floor is None)
     status = ("PENDING" if pending else
               "PASS" if (caps_pass and grind_component["status"] == "PASS"
-                         and success_floor) else "FAIL")
+                         and pre_detection["status"] == "PASS" and success_floor) else "FAIL")
     return {"gate": "1bKG2", "status": status,
             "clean_median_fir": median_fir, "clean_p95_fir": p95_fir,
             "clean_max_false_interrupts": max_false, "caps_pass": caps_pass,
@@ -347,11 +351,154 @@ def gate_1bKG4(rows, audit: dict) -> dict:
             "cite": "prereg_1b.md §2 + §4 (1bKG4); prereg.md 6.1 wasted-work + 6.2 (TTD>=2x)"}
 
 
+# -- P3: trace-computed gate inputs (wired from the run traces) -----------------
+
+def _read_trace(run_dir, name="trace.jsonl"):
+    from trace import read_trace
+    p = Path(run_dir) / name
+    return list(read_trace(p)) if p.exists() else []
+
+
+def replay_run_dir(run_dir) -> Optional[bool]:
+    """Instrumentation-integrity replay of ONE run (Task-A pattern, prereg_1b.md §2 Standing
+    / §4 line 451; archaeology_v2.md §A): re-instantiate the world from world_config.json,
+    replay the recorded tool_call sequence in counter order, and require each replayed
+    response (status + body) to match the recorded tool_response byte-for-byte, with the
+    SAME mechanical exclusions the banked check documents (409 tripped, auth-header, lossy
+    request, control-strip). Returns True/False, or None if the run carries no replayable
+    world trace. NO held-out value is surfaced — only a byte-identity verdict."""
+    import json as _json
+    import tempfile
+    from fastapi.testclient import TestClient
+    from analysis.replay_check import NOOP_PATH, strip_control
+    from world.server import create_app
+    from world.state import RunConfig
+
+    rd = Path(run_dir)
+    if not (rd / "trace_world.jsonl").exists() or not (rd / "world_config.json").exists():
+        return None
+    events = _read_trace(rd, "trace_world.jsonl")
+    calls, actors, resps, tripped = {}, {}, {}, set()
+    for e in events:
+        p = e.get("payload") or {}
+        n = p.get("counter")
+        if not isinstance(n, int):
+            continue
+        if e["event_type"] == "tool_call":
+            calls[n] = p; actors[n] = e.get("actor", "unknown")
+        elif e["event_type"] == "tool_response":
+            resps[n] = p
+        elif e["event_type"] == "worker_noncompliance":
+            tripped.add(n)
+    cfg = RunConfig.model_validate(
+        _json.loads((rd / "world_config.json").read_text(encoding="utf-8")))
+    mismatch = 0
+    with tempfile.TemporaryDirectory() as td:
+        cfg = cfg.model_copy(update={"trace_path": str(Path(td) / "r.jsonl")})
+        app = create_app(cfg)
+        client = TestClient(app, raise_server_exceptions=False)
+        token = None
+        for n in sorted(calls):
+            call, rec = calls[n], resps.get(n)
+            if rec is None:
+                continue
+            if n in tripped or rec.get("status") == 409:
+                client.get(NOOP_PATH, headers={"X-Worker-Id": "replay-noop"})
+                continue
+            method = (call.get("method") or "GET").upper()
+            path = call.get("path") or "/"
+            if call.get("query"):
+                path = f"{path}?{call['query']}"
+            headers = {"X-Worker-Id": actors.get(n, "replay")}
+            if token is not None:
+                headers["Authorization"] = f"Bearer {token}"
+            body = call.get("body")
+            if isinstance(body, (dict, list)):
+                r = client.request(method, path, json=body, headers=headers)
+            elif isinstance(body, str):
+                headers["Content-Type"] = "application/json"
+                r = client.request(method, path, content=body.encode("utf-8"), headers=headers)
+            else:
+                r = client.request(method, path, headers=headers)
+            try:
+                rb = r.json()
+            except ValueError:
+                rb = r.text
+            if (method == "POST" and call.get("path") == "/auth/token"
+                    and r.status_code == 200 and isinstance(rb, dict)):
+                token = rb.get("token", token)
+            rb, _ = strip_control(rb)
+            rec_body, _ = strip_control(rec.get("body"))
+            if r.status_code == rec.get("status") and rb == rec_body:
+                continue
+            if 401 in (r.status_code, rec.get("status")) and r.status_code != rec.get("status"):
+                continue                                  # AUTH-HDR (unrecorded header)
+            if isinstance(call.get("body"), str) and "�" in call["body"]:
+                continue                                  # LOSSY-REQ
+            mismatch += 1
+        app.state.ctx.trace.close()
+    inj = next((e for e in events if e["event_type"] == "injection_fired"), None)
+    return mismatch == 0 if inj is not None else None     # only injected runs gate (Standing)
+
+
+def instrumentation_replay(runs_root) -> dict:
+    """Standing precondition: the Task-A replay on 100% of INJECTED 1b cells, BEFORE gates.
+    Enumerates every run dir under runs_root, replays each injected run, and reports
+    all_pass. prereg_1b.md §2 Standing + §4 line 451."""
+    results = []
+    for rd in sorted(Path(runs_root).glob("*")):
+        if not rd.is_dir():
+            continue
+        v = replay_run_dir(rd)
+        if v is not None:                                 # injected run
+            results.append(v)
+    n = len(results)
+    return {"n_injected_runs": n, "n_pass": sum(results), "all_pass": (n > 0 and all(results)),
+            "cite": "prereg_1b.md §2 Standing + §4 line 451 (Task-A replay, 100% injected)"}
+
+
+def clean_cap_grinds(runs_root, arm_system: str = "V2") -> dict:
+    """Zero escalation-cap grinds on clean cells (1bKG2 hard). An escalation-cap grind is a
+    run that hit the escalation cap (conductor/run_one.py MAX_ESCALATIONS=52 ->
+    RunAbort('escalation_loop'), recorded in the run_end event). Counts clean (no
+    injection_fired) PRIMARY-arm runs whose run_end.reason == 'escalation_loop'. prereg_1b.md
+    §2 (1bKG2); conductor/run_one.py:662."""
+    count, n_clean = 0, 0
+    for rd in sorted(Path(runs_root).glob("*")):
+        if not rd.is_dir():
+            continue
+        events = _read_trace(rd, "trace.jsonl") or _read_trace(rd, "trace_world.jsonl")
+        if any(e["event_type"] == "injection_fired" for e in events):
+            continue                                      # injected run, not a clean cell
+        rs = next((e for e in events if e["event_type"] == "run_start"), None)
+        if rs and (rs.get("payload") or {}).get("system") not in (arm_system, None):
+            continue                                      # other arm
+        re = next((e for e in events if e["event_type"] == "run_end"), None)
+        if re is None:
+            continue
+        n_clean += 1
+        if (re.get("payload") or {}).get("reason") == "escalation_loop":
+            count += 1
+    return {"count": count, "n_clean_runs_scanned": n_clean,
+            "cite": "prereg_1b.md §2 (1bKG2 zero cap-grinds); conductor/run_one.py:662 "
+                    "(MAX_ESCALATIONS=52)"}
+
+
 # -- top-level -----------------------------------------------------------------
 
-def compute_gates(ledger_path, audit: Optional[dict] = None) -> dict:
+def compute_gates(ledger_path, audit: Optional[dict] = None,
+                  runs_root: Optional[str] = None) -> dict:
     rows = load_ledger(ledger_path)
-    audit = audit or {}
+    audit = dict(audit or {})
+    # P3: wire the instrumentation-integrity replay (#3) and clean cap-grind signal (#4)
+    # from the run traces when runs_root is available; an explicit audit value still wins.
+    if runs_root and Path(runs_root).exists():
+        rep = instrumentation_replay(runs_root)
+        audit["_instrumentation_replay"] = rep
+        audit.setdefault("instrumentation_replay_passed", rep["all_pass"])
+        grinds = clean_cap_grinds(runs_root)
+        audit["_clean_cap_grinds"] = grinds
+        audit.setdefault("clean_escalation_cap_grinds", grinds["count"])
     gates = [gate_1bKG1(rows, audit), gate_1bKG2(rows, audit),
              gate_1bKG3(rows, audit), gate_1bKG4(rows, audit)]
     statuses = [g["status"] for g in gates]
@@ -377,8 +524,21 @@ def format_report(report: dict) -> str:
 if __name__ == "__main__":
     from analysis.matrix_runner import LEDGER_DIR
     ledger = Path(sys.argv[1]) if len(sys.argv) > 1 else LEDGER_DIR / "results.jsonl"
-    rep = compute_gates(ledger)
+    runs_root = ledger.parent / "runs"
+    rep = compute_gates(ledger, runs_root=str(runs_root) if runs_root.exists() else None)
     print(format_report(rep))
     out = ledger.parent / "gate_report.json"
     out.write_text(json.dumps(rep, indent=1), encoding="utf-8")
     print(f"detail -> {out}")
+    # P4: present the seed-1102 probe-validity sample as a fillable worksheet for the
+    # author's post-matrix verdicts (AUTHOR-12). The gate consumes them as input.
+    pv = rep["gates"][0]["probe_validity"]
+    if pv.get("status") == "PENDING_AUTHOR_AUDIT":
+        ws = {"audit_seed": PROBE_AUDIT_SEED, "fraction": PROBE_AUDIT_FRACTION,
+              "criteria": "targeted / fresh / non-perturbing / independent (100%-or-exclude)",
+              "cite": pv["cite"],
+              "rows": [{"interrupt": f"{k}#{j}", "verdict": None} for (k, j) in pv["sample"]]}
+        wpath = ledger.parent / "probe_audit_worksheet.json"
+        wpath.write_text(json.dumps(ws, indent=1), encoding="utf-8")
+        print(f"probe-validity audit worksheet ({len(ws['rows'])} rows, seed "
+              f"{PROBE_AUDIT_SEED}) -> {wpath}")

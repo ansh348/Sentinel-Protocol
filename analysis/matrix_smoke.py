@@ -67,9 +67,18 @@ def main(argv) -> int:
                       f"ttd={r['ttd_tool_calls']} fir={r['fir']} cost=${r['total_cost_usd']}")
     print(f"persisted {n} records -> {ledger}")
 
-    print("\n=== gate computation over the seen-smoke ledger ===")
-    rep = MG.compute_gates(ledger)
+    print("\n=== gate computation over the seen-smoke ledger (P3 trace inputs wired) ===")
+    rep = MG.compute_gates(ledger, runs_root=runs_root)
     print(MG.format_report(rep))
+    # surface that #3 (replay) and #4 (cap-grind) computed from the seen-smoke traces
+    g1, g2 = rep["gates"][0], rep["gates"][1]
+    print(f"  #3 instrumentation replay: {g1['instrumentation_replay']['status']} "
+          f"({rep['gates'][0].get('cite','')[:0]}"
+          f"replay {MG.instrumentation_replay(runs_root)['n_pass']}/"
+          f"{MG.instrumentation_replay(runs_root)['n_injected_runs']} injected runs)")
+    print(f"  #4 clean cap-grind signal: count="
+          f"{MG.clean_cap_grinds(runs_root)['count']} "
+          f"(scanned {MG.clean_cap_grinds(runs_root)['n_clean_runs_scanned']} clean V2 runs)")
     (SMOKE_DIR / "gate_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
 
     print("\n=== escrow-load HASH-VERIFY ONLY (no sealed cell dispatched) ===")
