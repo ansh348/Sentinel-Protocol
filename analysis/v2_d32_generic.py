@@ -35,13 +35,39 @@ try:
 except Exception:
     pass
 
+import conductor.run_v2_loop as run_v2_loop  # noqa: E402
 from conductor.run_one import Plan, PlanStep, REPO_ROOT  # noqa: E402
 from conductor.run_v2_loop import V2Conductor  # noqa: E402
+from sentinel_v2.compile_probes import SoftAssumption, SoftAssumptionSet  # noqa: E402
+from sentinel_v2.pattern_liveness import path_samples_for_rev  # noqa: E402
 
 TASK = "c1"
 INJECTED_PASSAGE = "/docs/passages/pol-returns"
 N_INJECT = 6                      # the SEEN c1+doc_contradiction cell
 RUNS_ROOT = str(REPO / "runs" / "v2_d32_generic")
+
+# The full bounded passage family at rev 4, and what the OLD sorted(glob)[0] armed.
+PASSAGE_FAMILY = tuple(sorted(p for p in path_samples_for_rev(4)
+                              if p.startswith("/docs/passages/")))
+OLD_LEXICOGRAPHIC_PICK = PASSAGE_FAMILY[0]   # the single arbitrary member the old bug armed
+
+# The CANONICAL generic-naming compile output (the decisive case the diagnosis flagged):
+# ONE family-level assumption naming the passage-retrieval family `/docs/passages/
+# {passage_id}` with a CONTENT (value-on-stable-shape) dependency and NO concrete passage
+# id bound — category-blind, injection-blind, seen-only. Under D32 this grounds to ALL
+# bounded passage members as /content value probes (so pol-returns is covered as a family
+# member); under the old sorted(glob)[0] it would arm only the lexicographically-first
+# member (ops-shipping) and MISS. Controlling the compile output removes LLM-compile
+# variance, isolating the SUBSTRATE fix exactly as the diagnosis controlled the plan.
+GENERIC_SOFT = SoftAssumptionSet(plan_id="c1-generic-d32", assumptions=[
+    SoftAssumption(
+        plan_step="retrieve and summarize the document passages",
+        world_fact="each worker depends on the content of the document passages it "
+                   "retrieves from the passage store",
+        surface="/docs/passages/{passage_id}",   # family-level retrieval, NO concrete id
+        pointer="/content",                       # value-on-a-stable-shape (the content)
+        recovery_hint="re-fetch the passage and replan from the corrected content"),
+])
 
 # A GENERIC-naming plan: names the FAMILY-level passage retrieval with NO concrete
 # passage id bound (the worker discovers the ids from the index at run time). Category-
@@ -108,6 +134,22 @@ class GenericPlanV2Conductor(V2Conductor):
         return self.plan
 
 
+class ControlledSoftV2Conductor(GenericPlanV2Conductor):
+    """Generic-plan conductor whose COMPILE OUTPUT is also controlled to GENERIC_SOFT
+    (the canonical generic-naming soft set). The LLM compile is the one step replaced
+    by a fixed soft set (planner + compile variance controlled out, as the diagnosis
+    controlled the plan); compile_pipeline grounding, the arm-time baseline, barriers,
+    the pre-completion sweep, corroboration and replan are ALL the real path."""
+
+    def compile_and_arm(self) -> None:
+        orig = run_v2_loop.compile_assumptions
+        run_v2_loop.compile_assumptions = lambda *a, **k: (GENERIC_SOFT, [])
+        try:
+            super().compile_and_arm()
+        finally:
+            run_v2_loop.compile_assumptions = orig
+
+
 def _probe_of(reason: str, fault_shape: str) -> str:
     if "status" in reason and "fast path" in reason:
         return "status_fast_path"
@@ -118,19 +160,23 @@ def _probe_of(reason: str, fault_shape: str) -> str:
     return fault_shape or "content_drift"
 
 
-def run_generic(label: str, injection) -> dict:
+def run_generic(label: str, injection, conductor_cls=GenericPlanV2Conductor) -> dict:
     from trace import read_trace
-    print(f"\n=== V2 GENERIC-plan {TASK}+{injection or 'clean'} (label={label}) ===")
-    cond = GenericPlanV2Conductor(
+    print(f"\n=== {conductor_cls.__name__} {TASK}+{injection or 'clean'} (label={label}) ===")
+    cond = conductor_cls(
         task_path=str(REPO / "tasks" / f"{TASK}.yaml"), injection=injection,
         n_inject=(N_INJECT if injection else None), seed=1, runs_root=RUNS_ROOT,
         max_replans=2)
     summary = cond.run()
     invs = cond.v2_invalidations
 
-    # the armed PASSAGE FAMILY (the member set the contradiction surface grounds to)
+    # the armed PASSAGE FAMILY (the member set the contradiction surface grounds to) and
+    # the lens(es) on the injected member (D32 grounds the SURFACE; detecting a content
+    # swap additionally needs a content/value lens).
     armed_family = sorted({p.target for p in cond.v2_probes
                            if p.target.startswith("/docs/passages/")})
+    pol_lenses = sorted({(p.lens.op.value, p.lens.pointer, p.fault_shape.value)
+                         for p in cond.v2_probes if p.target == INJECTED_PASSAGE})
     inj_counter = None
     wt = cond.run_dir / "trace_world.jsonl"
     if wt.exists():
@@ -151,6 +197,9 @@ def run_generic(label: str, injection) -> dict:
         "cost_usd": summary["cost_usd"],
         "armed_passage_family": armed_family,
         "pol_returns_armed": INJECTED_PASSAGE in armed_family,
+        "pol_returns_lenses": pol_lenses,
+        "old_lexicographic_pick": OLD_LEXICOGRAPHIC_PICK,
+        "old_would_cover_pol_returns": OLD_LEXICOGRAPHIC_PICK == INJECTED_PASSAGE,
         "arm_capture_counter": cond.v2_arm_capture_counter,
         "injection_counter": inj_counter,
         "arm_probes": cond.v2_arm_probes,
@@ -161,8 +210,10 @@ def run_generic(label: str, injection) -> dict:
     print(f"  detected={row['detected']} interrupts={row['interrupts']} "
           f"replans={row['replans']} cost=${row['cost_usd']}")
     print(f"  armed passage family ({len(armed_family)}): {armed_family}")
-    print(f"  pol_returns_armed={row['pol_returns_armed']} "
-          f"arm_capture_counter={row['arm_capture_counter']} "
+    print(f"  pol_returns_armed={row['pol_returns_armed']} lenses={pol_lenses}")
+    print(f"  D32 vs OLD: old sorted(glob)[0]={OLD_LEXICOGRAPHIC_PICK} -> "
+          f"old_covers_pol_returns={row['old_would_cover_pol_returns']}")
+    print(f"  arm_capture_counter={row['arm_capture_counter']} "
           f"injection_counter={inj_counter}")
     for d in detail:
         print(f"    {d['target']} grade={d['grade']} probe={d['probe']} "
@@ -172,8 +223,21 @@ def run_generic(label: str, injection) -> dict:
 
 
 def main(argv) -> int:
-    rows = [run_generic("generic_doc_contradiction", "doc_contradiction"),
-            run_generic("generic_clean", None)]
+    mode = argv[0] if argv else "controlled"
+    if mode == "real_llm":
+        # the real-LLM generic plan (compile output NOT controlled) — a supporting
+        # artifact: confirms D32 arms pol-returns even under a real generic plan, but the
+        # real LLM here assigns a structure (not /content) lens, so the content swap is
+        # invisible — a lens/extraction property orthogonal to D32 grounding.
+        cls = GenericPlanV2Conductor
+    else:
+        # the DECISIVE controlled variant: the canonical generic-naming soft set (family
+        # template + /content lens, no concrete id). D32 grounds it to ALL members so
+        # pol-returns is covered with a content lens; the old code would arm only
+        # ops-shipping and MISS.
+        cls = ControlledSoftV2Conductor
+    rows = [run_generic("generic_doc_contradiction", "doc_contradiction", cls),
+            run_generic("generic_clean", None, cls)]
     print("\n================ D32 C2(b) GENERIC-PLAN VARIANT ================")
     total = 0.0
     for r in rows:
@@ -187,9 +251,13 @@ def main(argv) -> int:
         print(f"{r['task']}+{r['injection']:16s} detected={r['detected']!s:5s} "
               f"int={r['interrupts']} replans={r['replans']} "
               f"pol_returns_armed={r['pol_returns_armed']} family={len(r['armed_passage_family'])} "
-              f"probe={','.join(r['probes']) or '-'} cost=${r['cost_usd']}{rr}")
+              f"lenses={r['pol_returns_lenses']} probe={','.join(r['probes']) or '-'} "
+              f"cost=${r['cost_usd']}{rr}")
+    print(f"D32 vs OLD grounding: old sorted(glob)[0]={OLD_LEXICOGRAPHIC_PICK} "
+          f"covers_pol_returns={OLD_LEXICOGRAPHIC_PICK == INJECTED_PASSAGE} ; "
+          f"D32 arms full family ({len(PASSAGE_FAMILY)}) covers_pol_returns=True")
     print(f"DEV_RUN_SPEND=${round(total, 6)}")
-    out = REPO / "runs" / "v2_d32_generic" / "summary.json"
+    out = REPO / "runs" / "v2_d32_generic" / f"summary_{mode}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(rows, indent=1), encoding="utf-8")
     print(f"detail -> {out}")
