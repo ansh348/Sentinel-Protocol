@@ -1165,3 +1165,68 @@ read; no matrix spend; no dev-run) is recorded in
 cadence behavior is implemented; the scheduler stays NoOp and sentinel_v2 stays flag-gated off
 (flag off byte-identical to Phase 1). Category-blind throughout — no quota/version/resource-
 specific behavior anywhere in the scheduler or ledger.
+
+---
+
+## D30 — Arm-time clean-baseline capture (content-shaped detection; amends D29 scheduling)
+
+**Date:** 2026-06-14 (v2 run-loop fidelity follow-up; committed BEFORE the fix code).
+**Affects:** the v2 cadence scheduling in the live run loop (`conductor/run_v2_loop.py`
+`V2Conductor`; decisions/cadence_semantics.md §5, §6). AMENDS the frozen prereg_1b.md
+(6c8cc47) and D29 via the §7 deviation mechanism: D29's event-gated sweeps did not
+guarantee a clean reference for content-shaped detection. Category-blind and
+**injection-blind**.
+
+### Why (the finding D30 fixes)
+
+Run-loop fidelity (decisions/v2_runloop_fidelity_2026-06-14.md) found that **content-shaped
+detection** (a fingerprint or field re-read that must diff against a clean reference —
+schema_drift, doc_contradiction) **missed through the real V2Conductor path** when the only
+worker read of the grounded surface landed AFTER the injection point: no clean pre-injection
+baseline existed to diff against, so the drift probe went INCONCLUSIVE. Status-coded faults
+(404/401 via the fast path) were robust (they need no baseline). The D29 event-gated +
+pre-completion sweeps did not GUARANTEE an earliest-clean reference per load-bearing surface;
+opportunistic "capture at first worker read" is exactly the read-order fragility that caused
+the miss.
+
+### The ruling (D30)
+
+1. **Proactive arm-time capture.** At run start — after the v2 compile, **before any worker
+   tool call** — fire ONE side-channel observation of EVERY load-bearing surface in the
+   compiled probe set, through the §8 equivalence gate, and record it as that surface's clean
+   baseline. Because injections fire mid-run (50% of the clean-median call count) and probes
+   are side-channel-isolated from the injection clock, a run-start sweep observes every
+   load-bearing surface **in its clean window by construction**, regardless of worker read
+   order. It is NOT opportunistic capture-at-first-read.
+2. **Category-blind and injection-blind.** The sweep records the earliest clean observation
+   of every load-bearing surface with no category logic and no knowledge that an injection
+   exists. It never tunes toward drift/contradiction/any category or toward the held-out.
+3. **Guaranteed source; refresh-not-replace.** The arm-time capture is the GUARANTEED clean
+   baseline source. A later worker harvest (a clean pre-injection read with the worker's exact
+   projection/query) may **REFRESH** a baseline, but never **REPLACE** the arm-time capture as
+   the guaranteed source (a post-injection worker read must not overwrite the clean reference).
+   Projection-consistency: the barrier probe replays the query the baseline was captured with
+   (the arm-time capture uses the bare surface; a refresh carries the worker's query, §8).
+4. **D29 otherwise preserved.** Event-gated sweeps, the guaranteed pre-completion sweep, the
+   D28 status fast path, the D29 wobble dedup, and corroboration are unchanged. Only the
+   addition of the run-start capture changes scheduling.
+
+### Budget impact
+
+Dollars: **~$0** — the arm-time probes are deterministic side-channel reads (no LLM); KG3
+(dollars, total_cost_usd) is unaffected. One worker-class token is acquired at run start (a
+single main call, well inside the clean window) so the §8 probes carry the worker principal.
+The added probe COUNT (one per load-bearing surface at run start) is reported on the
+**paid-probe-per-run-length count submetric**, not the dollar gate.
+
+### Residual (named, NOT patched — threats to validity)
+
+A **runtime-discovered (provisional) surface** (a worker reads an unregistered output-feeding
+surface, design §14) whose **first worker touch falls after the injection point** cannot
+always be clean-baselined even by the arm-time sweep — the sweep only knew the compiled probe
+set at run start, so a surface discovered later has no arm-time clean reference, and its first
+(post-injection) read is dirty. Recorded as a threats-to-validity item; not patched.
+
+**Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell touched; the
+fix is behind the v2 flag (flag off byte-identical to Phase 1). Category-blind and
+injection-blind throughout.
