@@ -49,6 +49,7 @@ class Disposition(str, Enum):
     ATTACH = "attach"
     PASSIVE = "passive"
     TELEMETRY_ONLY = "telemetry_only"
+    WRITE_FOOTPRINT = "write_footprint"     # D31: a planned-write surface, footprint-scoped
 
 
 @dataclass(frozen=True)
@@ -135,17 +136,22 @@ def evaluate_attachment(assumption: Assumption, *, planned_write_set=()) -> Atta
     """Decide attach / passive / telemetry-only for one assumption."""
     write_set = tuple(planned_write_set)
 
-    # 1. read-and-trust gate (§3.3 + A4 global write-set). For a relation, EITHER
-    #    surface being written breaks read-and-trust on the join.
+    # 1. write-footprint gate (D31, replacing the old §3.3/A4 read-and-trust gate).
+    #    A surface ANY worker is planned to write legitimately drifts — a frozen
+    #    baseline would fire on the plan's own intended work — so it is NOT compiled
+    #    as an ordinary active drift probe. But it is NOT silently PASSIVE either:
+    #    it is FOOTPRINT-SCOPED (off-footprint monitored, in-footprint
+    #    verify-or-UNCOVERED_CAUTION; loud, scored by C7). For a relation, EITHER
+    #    surface being written routes the join here.
     surfaces = [assumption.surface]
     if assumption.kind is AssumptionKind.RELATION and assumption.partner_target:
         surfaces.append(assumption.partner_target)
     written = [s for s in surfaces if _written(s, write_set)]
     if written:
         return AttachmentDecision(
-            Disposition.PASSIVE,
+            Disposition.WRITE_FOOTPRINT,
             reason=f"surface(s) {written} in the global planned write-set; "
-                   "legitimately drift, so not read-and-trust (§3.3/A4)")
+                   "footprint-scoped, not silently passive (D31)")
 
     # 2. provenance gate (§3.3)
     if not assumption.provenance.is_complete():

@@ -25,7 +25,7 @@ from conductor.run_one import Conductor, Dismiss, PlanStep, RunAbort
 from conductor.systems import SystemConfig
 from sentinel_v2.arms import run_v2_detection
 from sentinel_v2.compile_probes import compile_assumptions, compile_pipeline
-from sentinel_v2.corroboration import Grade
+from sentinel_v2.corroboration import CorroboratedInvalidation, Grade
 from sentinel_v2.probes import ProbeResult
 from sentinel_v2.write_footprint import planned_write_patterns
 
@@ -100,6 +100,7 @@ class V2Conductor(Conductor):
         # the §4 gate probes the parameterized compile armed.
         self.v2_write_set: tuple = ()
         self.v2_gate_probes: list = []
+        self.v2_write_footprints: list = []   # D31 C4: planned-write surfaces, footprint-scoped
         # D31 C2: surfaces a barrier already re-observed (so the guaranteed
         # pre-completion sweep does not redundantly re-sweep a fresh surface), and
         # the one-shot guard + count submetric for that sweep.
@@ -133,6 +134,11 @@ class V2Conductor(Conductor):
             sc_client.close()
         self.v2_gate_probes = [p for p in cr.probes
                                if p.lens.op.value == "gate_shadow"]
+        # D31 C4: keep-not-flush the write footprints (dedup by surface, latest wins)
+        by_surface = {f.surface: f for f in self.v2_write_footprints}
+        for f in cr.write_footprints:
+            by_surface[f.surface] = f
+        self.v2_write_footprints = list(by_surface.values())
         # keep-not-flush (D2/D29): keep prior probes, add new ones. Dedup by probe
         # IDENTITY (target + shape + lens), NOT by target alone — a surface can carry
         # several load-bearing assumptions (e.g. a schema-shape AND a value probe on
@@ -379,7 +385,7 @@ class V2Conductor(Conductor):
         unreachable surfaces route to the uncovered valve. A pre-completion detection
         is RECORDED (M6/C7) but does not replan — the run is ending, there is no
         productive work left to redispatch."""
-        if self._v2_swept or not self.v2_probes:
+        if self._v2_swept or (not self.v2_probes and not self.v2_write_footprints):
             return
         self._v2_swept = True
         self._harvest_into_baselines()
@@ -409,6 +415,50 @@ class V2Conductor(Conductor):
                         payload={"layer": "v2_pre_completion_sweep",
                                  "swept": res["swept"], "reachable": res["reachable"],
                                  "uncovered": res["uncovered"]})
+        self._evaluate_write_footprints(client, token)
+
+    def _evaluate_write_footprints(self, client, token) -> None:
+        """D31 C4 write-surface policy, evaluated on the FINAL state (pre-completion).
+        Off-footprint change or an in-footprint deviation from the authorized
+        transition is DRIFT (interrupt); an unverifiable footprint is UNCOVERED_CAUTION
+        (loud, scored by C7 — never silently clean). The footprint check is the PRIMARY
+        predicate for a write surface: a legitimate permanent write is consistent with
+        its footprint and so is never promoted as drift by D28 persistence (the write
+        surface never enters the ordinary drift+persistence path)."""
+        if not self.v2_write_footprints:
+            return
+        from sentinel_v2.probes import ProbeExecutor
+        from sentinel_v2.write_surface import (FootprintVerdict,
+                                              evaluate_write_footprint)
+        ex = ProbeExecutor(client, auth_token=token)
+        drifts = []
+        for fp in self.v2_write_footprints:
+            self.v2_pre_completion_probes += 1
+            try:
+                obs = ex.get(fp.surface)
+            except Exception as exc:
+                self.trace.emit(actor="sentinel_v2", event_type="uncovered",
+                                payload={"where": "v2_write_footprint",
+                                         "target": fp.surface,
+                                         "reason": "unreachable write surface",
+                                         "detail": str(exc)[:120]})
+                continue
+            ev = evaluate_write_footprint(fp, self.v2_baselines.get(fp.surface), obs)
+            if ev.verdict is FootprintVerdict.DRIFT:
+                drifts.append(CorroboratedInvalidation(
+                    target=fp.surface, grade=Grade.INTERRUPT,
+                    fault_shape="value_changed", evidence_class="content_shaped",
+                    reason=f"write-surface drift: {ev.reason}", witness=ev.witness))
+            elif ev.verdict is FootprintVerdict.UNCOVERED_CAUTION:
+                self.trace.emit(actor="sentinel_v2", event_type="uncovered",
+                                payload={"where": "v2_write_footprint",
+                                         "target": fp.surface, "grade": "caution",
+                                         "reason": ev.reason})
+            # CLEAN -> consistent with the authorized footprint; nothing to record
+        if drifts:
+            self._record_invalidations(drifts, subplan_id="pre_completion",
+                                       counter=self._current_counter(),
+                                       where="v2_write_footprint")
 
     def _v2_replan(self, inv, outcome, executor, pending) -> None:
         paused = self.pause_workers("global", [], outcome.instance_id)

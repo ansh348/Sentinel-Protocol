@@ -27,18 +27,19 @@ def _assume(kind: AssumptionKind, **o) -> Assumption:
 # -- gate order ----------------------------------------------------------------
 
 def test_write_set_gate_wins_first():
-    """A surface in the global planned write-set is PASSIVE even with complete
-    provenance and a non-self-revealing surface — it legitimately drifts."""
+    """A surface in the global planned write-set is FOOTPRINT-scoped (D31) — not an
+    active drift probe (it legitimately drifts) and not silently passive — even with
+    complete provenance and a non-self-revealing surface."""
     a = _assume(AssumptionKind.VALUE, surface="/repo/files/config/settings.yaml",
                 pointer="/content")
     d = evaluate_attachment(a, planned_write_set=("/repo/files/*",))
-    assert d.disposition is Disposition.PASSIVE and "write-set" in d.reason
+    assert d.disposition is Disposition.WRITE_FOOTPRINT and "footprint" in d.reason
     assert d.probe is None
-    # write-set beats an incomplete provenance too (ordering check)
+    # write-footprint beats an incomplete provenance too (ordering check)
     a2 = _assume(AssumptionKind.VALUE, surface="/repo/files/x", pointer="/c",
                  provenance=_prov(complete=False))
     assert evaluate_attachment(a2, planned_write_set=("/repo/files/*",)).disposition \
-        is Disposition.PASSIVE
+        is Disposition.WRITE_FOOTPRINT
 
 
 def test_incomplete_provenance_is_telemetry_only():
@@ -117,9 +118,9 @@ def test_lens_selection_structure_status_presence_whole_payload():
 
 # -- relation read-and-trust spans both surfaces -------------------------------
 
-def test_relation_partner_in_write_set_is_passive():
+def test_relation_partner_in_write_set_is_footprint_scoped():
     a = _assume(AssumptionKind.RELATION, surface="/orders", pointer="/lines",
                 field="sku", partner_target="/repo/files/index",
                 partner_pointer="/items", partner_field="sku", relation="subset")
     d = evaluate_attachment(a, planned_write_set=("/repo/files/*",))
-    assert d.disposition is Disposition.PASSIVE and "write-set" in d.reason
+    assert d.disposition is Disposition.WRITE_FOOTPRINT and "footprint" in d.reason

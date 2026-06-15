@@ -63,12 +63,15 @@ def test_bare_surface_attaches_a_structure_probe():
     assert result.probes[0].fault_shape is FaultShape.SCHEMA_SHAPE
 
 
-def test_planned_write_set_surface_is_passive():
+def test_planned_write_set_surface_is_footprint_scoped():
+    # D31: a planned-write surface is footprint-scoped, not an active drift probe
+    # and not silently passive.
     soft = _set(_a("/repo/files/config/settings.yaml", pointer="/content"))
     result = compile_pipeline(soft, world_rev=4,
                               planned_write_set=("/repo/files/*",))
-    assert result.probes == [] and len(result.passive) == 1
-    assert "write-set" in result.passive[0]["reason"]
+    assert result.probes == [] and result.passive == []
+    assert [f.surface for f in result.write_footprints] == \
+        ["/repo/files/config/settings.yaml"]
 
 
 # -- §4 gate path --------------------------------------------------------------

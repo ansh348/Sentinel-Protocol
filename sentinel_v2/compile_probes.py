@@ -41,6 +41,7 @@ from sentinel_v2.gate_route import (DOCS_GATE_SHADOW, REPO_GATE_SHADOW,
                                     compile_gate_probe)
 from sentinel_v2.pattern_liveness import path_samples_for_rev
 from sentinel_v2.probe_spec import Probe, Provenance
+from sentinel_v2.write_surface import WriteFootprint
 from trace import TraceWriter
 from world.server import classify_url_pattern
 
@@ -199,10 +200,11 @@ class CompileResult:
     plan_id: str
     probes: list                  # list[Probe] — the compiled active probes
     telemetry_only: list          # demoted: incomplete provenance (§3.3)
-    passive: list                 # left passive (self-revealing / planned write-set)
+    passive: list                 # left passive (self-revealing)
     uncovered: list               # §4 trapdoor failed / unverifiable → caution (D1)
     soft_assumptions: SoftAssumptionSet
     cost_usd: float = 0.0
+    write_footprints: list = field(default_factory=list)  # D31: planned-write surfaces, footprint-scoped
 
 
 def _to_attachment_assumption(soft: SoftAssumption, aid: str,
@@ -251,6 +253,7 @@ def compile_pipeline(soft_set: SoftAssumptionSet, *, world_rev: int = 1,
         raise GroundingError(sorted(set(hallucinated)), world_rev)
 
     probes, telemetry, passive, uncovered = [], [], [], []
+    write_footprints = []
     for idx, soft in enumerate(soft_set.assumptions, start=1):
         aid = f"a{idx}"
         surface = grounded[idx]
@@ -286,6 +289,13 @@ def compile_pipeline(soft_set: SoftAssumptionSet, *, world_rev: int = 1,
                                        planned_write_set=planned_write_set)
         if decision.disposition is Disposition.ATTACH:
             probes.append(decision.probe)
+        elif decision.disposition is Disposition.WRITE_FOOTPRINT:
+            # D31: a planned-write surface is footprint-scoped, not an active drift
+            # probe (a legitimate write would false-positive) and not silently
+            # passive. The whole-surface footprint with no expected post-state is the
+            # honest minimum (precise transition extraction is the item-3 residual) →
+            # UNCOVERED_CAUTION at runtime, loud and scored by C7.
+            write_footprints.append(WriteFootprint(surface=surface))
         elif decision.disposition is Disposition.TELEMETRY_ONLY:
             telemetry.append({"assumption_id": aid, "surface": surface,
                               "reason": decision.reason})
@@ -295,7 +305,8 @@ def compile_pipeline(soft_set: SoftAssumptionSet, *, world_rev: int = 1,
 
     return CompileResult(plan_id=soft_set.plan_id, probes=probes,
                          telemetry_only=telemetry, passive=passive,
-                         uncovered=uncovered, soft_assumptions=soft_set)
+                         uncovered=uncovered, soft_assumptions=soft_set,
+                         write_footprints=write_footprints)
 
 
 # -- C4: compile-output recording + byte-identical replay ----------------------
@@ -315,7 +326,9 @@ def compile_result_summary(cr: CompileResult) -> dict:
     return {"plan_id": cr.plan_id,
             "probes": [probe_to_dict(p) for p in cr.probes],
             "telemetry_only": cr.telemetry_only,
-            "passive": cr.passive, "uncovered": cr.uncovered}
+            "passive": cr.passive, "uncovered": cr.uncovered,
+            "write_footprints": [{"surface": f.surface, "fields": list(f.fields),
+                                  "expected": f.expected} for f in cr.write_footprints]}
 
 
 def record_compile(trace: TraceWriter, cr: CompileResult, *, cost_usd: float = 0.0
