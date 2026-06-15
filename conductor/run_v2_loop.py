@@ -27,6 +27,45 @@ from sentinel_v2.arms import run_v2_detection
 from sentinel_v2.compile_probes import compile_assumptions, compile_pipeline
 from sentinel_v2.corroboration import Grade
 from sentinel_v2.probes import ProbeResult
+from sentinel_v2.write_footprint import planned_write_patterns
+
+class _SideChannelClient:
+    """A perturbation-isolated READ handle over the run's world (D31 fence): every
+    request carries the probe-channel marker, so a read never advances the
+    injection counter (vector 1), never enters the token stream (vector 2), and
+    mutates nothing (a write 405s at the transport). The compile-time §4 gate read
+    uses this; it can never perturb the injection clock. /admin reads are
+    middleware-excluded, so they pass through counter-neutrally regardless."""
+
+    def __init__(self, base_url: str, timeout: float = 10) -> None:
+        self._c = httpx.Client(base_url=base_url, timeout=timeout)
+
+    def _h(self, headers) -> dict:
+        h = {"X-Probe-Channel": "1", "X-Worker-Id": "probe"}
+        if headers:
+            h.update(dict(headers))
+        return h
+
+    def get(self, path, *, params=None, headers=None):
+        return self._c.get(path, params=params, headers=self._h(headers))
+
+    def head(self, path, *, headers=None):
+        return self._c.head(path, headers=self._h(headers))
+
+    def post(self, path, *, json=None, headers=None):
+        return self._c.post(path, json=json, headers=self._h(headers))
+
+    def close(self) -> None:
+        self._c.close()
+
+
+class _SideChannelWorld:
+    """The `world` handle compile_pipeline's §4 gate route consumes (it needs only
+    `.client`). A side-channel read handle, never the worker/injection channel."""
+
+    def __init__(self, client: _SideChannelClient) -> None:
+        self.client = client
+
 
 V2_SYSTEM = SystemConfig(
     "V2", "v2 stack: compile + corroboration + cadence (two-tier, no judge)",
@@ -57,6 +96,10 @@ class V2Conductor(Conductor):
         self.v2_baseline_source: dict = {}    # surface -> "arm_time" | "harvest"
         self.v2_baseline_counter: dict = {}   # surface -> main counter when its baseline was captured
         self.v2_arm_probes = 0                # arm-time probe count (the submetric delta)
+        # D31: the planned write-set (category-blind, from the plan declaration) and
+        # the §4 gate probes the parameterized compile armed.
+        self.v2_write_set: tuple = ()
+        self.v2_gate_probes: list = []
 
     # -- v2 compile replaces the v1 tripwire compile/arm ----------------------
     def compile_and_arm(self) -> None:
@@ -65,7 +108,25 @@ class V2Conductor(Conductor):
         self.all_calls.extend(sessions)
         if soft is None:
             raise RunAbort("compile_failed", "v2 compile produced no soft set")
-        cr = compile_pipeline(soft, world_rev=int(self.task.get("world_rev", 1)))
+        # D31: the run-loop compile was UNDER-PARAMETERIZED — it dropped `world`
+        # (so §4 gate probes never armed), `auth_token` (the docs gate shadow), and
+        # `planned_write_set` (so a legitimate worker write read as drift). Supply
+        # all three. The `world` is a perturbation-isolated side-channel READ handle;
+        # the §4 non-perturbation check is counter-neutral (D31), so this compile
+        # advances NO injection-counting channel (asserted: injection call-index
+        # unchanged with vs without the gate-probe compile).
+        self.v2_write_set = planned_write_patterns(self.task.get("plan", []))
+        token = self._acquire_v2_token()
+        sc_client = _SideChannelClient(self.base_url)
+        try:
+            cr = compile_pipeline(
+                soft, world_rev=int(self.task.get("world_rev", 1)),
+                world=_SideChannelWorld(sc_client), auth_token=token,
+                planned_write_set=self.v2_write_set)
+        finally:
+            sc_client.close()
+        self.v2_gate_probes = [p for p in cr.probes
+                               if p.lens.op.value == "gate_shadow"]
         # keep-not-flush (D2/D29): keep prior probes, add new ones. Dedup by probe
         # IDENTITY (target + shape + lens), NOT by target alone — a surface can carry
         # several load-bearing assumptions (e.g. a schema-shape AND a value probe on
@@ -82,7 +143,10 @@ class V2Conductor(Conductor):
                         payload={"layer": "v2_probes", "plan_id": soft.plan_id,
                                  "revision": self.plan.revision,
                                  "count": len(self.v2_probes),
-                                 "targets": [p.target for p in self.v2_probes]})
+                                 "targets": [p.target for p in self.v2_probes],
+                                 "write_set": list(self.v2_write_set),
+                                 "gate_probes": [p.target for p in self.v2_gate_probes],
+                                 "uncovered": cr.uncovered})
         # D30: the GUARANTEED clean reference. Fire the arm-time sweep ONCE, at run
         # start (the first compile, before any worker tool call). Replan recompiles do
         # NOT re-capture (they run mid-run / post-injection — not clean).

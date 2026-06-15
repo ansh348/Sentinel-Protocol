@@ -758,6 +758,10 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
             "pricing_drift": state.pricing_drift,
             "active_tokens": len(state.active_tokens),
             "revoked_tokens": len(state.revoked_tokens),
+            # D31: the validated_docs sentinel exposed for the §4 non-perturbation
+            # trapdoor's vector 3, read counter-neutrally (this endpoint is
+            # middleware-excluded) instead of via a counting canary POST.
+            "validated_docs": len(state.validated_docs),
             "quota_family": sorted(state.quota_family),
             "quota_remaining": state.quota_remaining,
             "bump_family": sorted(state.bump_family),

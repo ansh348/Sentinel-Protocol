@@ -30,11 +30,6 @@ REPO_GATE_SHADOW = "/repo/gate_status"
 DOCS_GATE_SHADOW = "/docs/gate_status"
 ENFORCING_POINTER = "/enforcing"
 
-# A never-validated canary doc for the sentinel vector: it must stay un-packageable.
-_SENTINEL_CANARY = {"title": "nonperturbation-canary", "body": "z" * 60,
-                    "citations": ["__no_such_passage__"]}
-
-
 @dataclass(frozen=True)
 class NonPerturbationReport:
     counter_ok: bool        # vector 1: the injection-clock counter
@@ -52,11 +47,20 @@ class NonPerturbationReport:
 
 
 def check_non_perturbation(world, probe_action: Callable[[], object], *,
-                           auth_token: Optional[str]) -> NonPerturbationReport:
+                           auth_token: Optional[str] = None) -> NonPerturbationReport:
     """Run `probe_action` (the §4 side-channel read) and verify the three measured
     perturbation vectors (archaeology_v2 G7) are untouched. A perturbing action
-    trips the trapdoor (ruling D1). /admin reads are counter-excluded, so the
-    measurement itself does not perturb."""
+    trips the trapdoor (ruling D1).
+
+    D31: ALL THREE vectors are read counter-neutrally from the middleware-excluded
+    /admin/state around the probe action, so the safety check itself advances NO
+    injection-counting channel (the fence: the compile-time §4 read must not route
+    through the worker/injection-counting channel). The §4 read routes over the
+    read-only probe channel and so cannot perturb by construction; the admin reads
+    confirm it. The sentinel vector (vector 3) is validated_docs: a §4 read that
+    admitted anything to validated_docs would move it. (This replaces the prior
+    canary POST, which was a COUNTING write — it would have shifted injection
+    timing if run inside a comparative cell.)"""
     client = world.client
 
     def admin():
@@ -67,14 +71,7 @@ def check_non_perturbation(world, probe_action: Callable[[], object], *,
     after = admin()
     counter_ok = after["counter"] == before["counter"]
     token_stream_ok = after["active_tokens"] == before["active_tokens"]
-
-    # sentinel: a never-validated canary still cannot be packaged (409). If the
-    # probe action had admitted anything to validated_docs, the sentinel moved.
-    headers = {"X-Worker-Id": "w1"}
-    if auth_token:
-        headers["Authorization"] = f"Bearer {auth_token}"
-    pkg = client.post("/docs/package", json=_SENTINEL_CANARY, headers=headers)
-    sentinel_ok = pkg.status_code == 409
+    sentinel_ok = after.get("validated_docs") == before.get("validated_docs")
 
     return NonPerturbationReport(counter_ok, token_stream_ok, sentinel_ok)
 
