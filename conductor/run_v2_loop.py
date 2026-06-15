@@ -100,6 +100,12 @@ class V2Conductor(Conductor):
         # the §4 gate probes the parameterized compile armed.
         self.v2_write_set: tuple = ()
         self.v2_gate_probes: list = []
+        # D31 C2: surfaces a barrier already re-observed (so the guaranteed
+        # pre-completion sweep does not redundantly re-sweep a fresh surface), and
+        # the one-shot guard + count submetric for that sweep.
+        self.v2_observed_surfaces: set = set()
+        self._v2_swept = False
+        self.v2_pre_completion_probes = 0
 
     # -- v2 compile replaces the v1 tripwire compile/arm ----------------------
     def compile_and_arm(self) -> None:
@@ -207,15 +213,24 @@ class V2Conductor(Conductor):
                         payload={"layer": "v2_arm_baseline", "capture_counter": counter,
                                  "captured": captured, "probed": self.v2_arm_probes})
 
-    # -- drain with the v2 worker barrier -------------------------------------
+    # -- drain with the v2 worker barrier + guaranteed pre-completion sweep ----
     def drain(self, executor, pending: dict[Future, str]) -> None:
-        while pending:
-            done, _ = wait(list(pending), return_when=FIRST_COMPLETED)
-            for future in done:
-                instance_id = pending.pop(future)
-                outcome = future.result()
-                self.outcomes[instance_id] = outcome
-                self._v2_worker_barrier(outcome, executor, pending)
+        while True:
+            while pending:
+                done, _ = wait(list(pending), return_when=FIRST_COMPLETED)
+                for future in done:
+                    instance_id = pending.pop(future)
+                    outcome = future.result()
+                    self.outcomes[instance_id] = outcome
+                    self._v2_worker_barrier(outcome, executor, pending)
+            # all workers idle -> the guaranteed pre-completion sweep (fires once;
+            # if a barrier replan re-dispatched into `pending`, that is drained by the
+            # inner loop above before the sweep, and the sweep is not re-run).
+            if self._v2_swept:
+                break
+            self._pre_completion_sweep()
+            if not pending:
+                break
 
     def _last_observed_token(self) -> Optional[str]:
         """Re-use the most recently observed bearer token (E.2) from the world trace,
@@ -293,6 +308,38 @@ class V2Conductor(Conductor):
                     touched.add(e["payload"]["path"])
         return touched or targets
 
+    def _current_counter(self) -> Optional[int]:
+        try:
+            return self._admin("GET", "/admin/state").json().get("counter")
+        except Exception:
+            return None
+
+    def _record_invalidations(self, invs, *, subplan_id, counter, where) -> list:
+        """D29 wobble dedup + escalation, shared by the worker barrier and the
+        pre-completion sweep. Returns the NEW interrupt-grade invalidations (a
+        re-detection of an already-open surface coalesces into a suppressed_refire —
+        never a new interrupt or replan, so a sustained violation cannot flood)."""
+        new = [i for i in invs if i.target not in self.v2_interrupted_surfaces]
+        for inv in invs:
+            if inv.target in self.v2_interrupted_surfaces:
+                self.v2_coalesced += 1
+                self.trace.emit(actor="sentinel_v2", event_type="suppressed_refire",
+                                payload={"where": where,
+                                         "tripwire_id": f"v2_probe::{inv.target}",
+                                         "target": inv.target, "counter": counter})
+        for inv in new:
+            self.v2_invalidations.append(inv)
+            self.v2_interrupted_surfaces.add(inv.target)
+            # an escalation carrying the surface (_path) makes the interrupt
+            # attributable to the injection for the M6 instrument (metrics §0)
+            self.trace.emit(actor="sentinel_v2", event_type="escalation",
+                            payload={"tripwire_id": f"v2_probe::{inv.target}",
+                                     "evidence": {"_path": inv.target,
+                                                  "grade": inv.grade.value},
+                                     "subplan_id": subplan_id, "counter": counter,
+                                     "where": where})
+        return [i for i in new if i.grade is Grade.INTERRUPT]
+
     def _v2_worker_barrier(self, outcome, executor, pending) -> None:
         if not self.v2_probes:
             return
@@ -315,38 +362,53 @@ class V2Conductor(Conductor):
             return
         finally:
             client.close()
-
-        invs = det["invalidations"]
-        try:
-            counter = self._admin("GET", "/admin/state").json().get("counter")
-        except Exception:
-            counter = None
-        # D29 wobble dedup: one open wobble per surface. A re-detection of an
-        # already-open surface (a sustained 404 seen at every later barrier) coalesces
-        # into the existing incident — logged as a suppressed_refire, never a new
-        # interrupt or replan. This is what keeps a sustained violation from flooding.
-        new = [i for i in invs if i.target not in self.v2_interrupted_surfaces]
-        for inv in invs:
-            if inv.target in self.v2_interrupted_surfaces:
-                self.v2_coalesced += 1
-                self.trace.emit(actor="sentinel_v2", event_type="suppressed_refire",
-                                payload={"where": "v2_cadence",
-                                         "tripwire_id": f"v2_probe::{inv.target}",
-                                         "target": inv.target, "counter": counter})
-        for inv in new:
-            self.v2_invalidations.append(inv)
-            self.v2_interrupted_surfaces.add(inv.target)
-            # an escalation carrying the surface (_path) makes the interrupt
-            # attributable to the injection for the M6 instrument (metrics §0)
-            self.trace.emit(actor="sentinel_v2", event_type="escalation",
-                            payload={"tripwire_id": f"v2_probe::{inv.target}",
-                                     "evidence": {"_path": inv.target,
-                                                  "grade": inv.grade.value},
-                                     "subplan_id": outcome.subplan_id,
-                                     "counter": counter})
-        interrupts = [i for i in new if i.grade is Grade.INTERRUPT]
+        # these surfaces are now FRESH (re-observed at this barrier) — the guaranteed
+        # pre-completion sweep will not redundantly re-sweep them.
+        self.v2_observed_surfaces.update(p.target for p in barrier_probes)
+        interrupts = self._record_invalidations(
+            det["invalidations"], subplan_id=outcome.subplan_id,
+            counter=self._current_counter(), where="v2_cadence")
         if interrupts and self.replans_done < self.max_replans:
             self._v2_replan(interrupts[0], outcome, executor, pending)
+
+    def _pre_completion_sweep(self) -> None:
+        """D29 §3.1 guaranteed pre-completion sweep (D31 C2). Fire ONCE after the last
+        worker drains, before aggregate: re-observe every load-bearing surface no
+        barrier re-observed — most importantly the side-channel-only §4 gate shadow,
+        which a worker can never touch. Side-channel, $0 dollars (count submetric);
+        unreachable surfaces route to the uncovered valve. A pre-completion detection
+        is RECORDED (M6/C7) but does not replan — the run is ending, there is no
+        productive work left to redispatch."""
+        if self._v2_swept or not self.v2_probes:
+            return
+        self._v2_swept = True
+        self._harvest_into_baselines()
+        from sentinel_v2.cadence.sweep import run_pre_completion_sweep
+        token = self._v2_token or self._last_observed_token()
+        client = httpx.Client(base_url=self.base_url, timeout=10)
+        try:
+            res = run_pre_completion_sweep(
+                self.v2_probes, self.v2_observed_surfaces,
+                self.v2_interrupted_surfaces, client=client, auth_token=token,
+                baselines=self.v2_baselines, queries=self.v2_query, judge=self._judge,
+                emit=lambda et, p: self.trace.emit(actor="sentinel_v2",
+                                                   event_type=et, payload=p))
+        except Exception as exc:                 # the sweep never crashes the run
+            self.trace.emit(actor="sentinel_v2", event_type="error",
+                            payload={"where": "v2_pre_completion_sweep",
+                                     "detail": str(exc)[:200]})
+            return
+        finally:
+            client.close()
+        self.v2_pre_completion_probes += len(res["swept"])
+        self.v2_observed_surfaces.update(res["reachable"])
+        self._record_invalidations(res["invalidations"], subplan_id="pre_completion",
+                                   counter=self._current_counter(),
+                                   where="v2_pre_completion_sweep")
+        self.trace.emit(actor="sentinel_v2", event_type="corroboration",
+                        payload={"layer": "v2_pre_completion_sweep",
+                                 "swept": res["swept"], "reachable": res["reachable"],
+                                 "uncovered": res["uncovered"]})
 
     def _v2_replan(self, inv, outcome, executor, pending) -> None:
         paused = self.pause_workers("global", [], outcome.instance_id)
@@ -393,6 +455,9 @@ def run_v2_loop(*, task_path, injection=None, n_inject=None, seed=1,
     summary["v2_invalidations"] = len(cond.v2_invalidations)
     summary["v2_interrupts"] = cond.v2_interrupts
     summary["v2_coalesced"] = cond.v2_coalesced
+    summary["pre_completion_probes"] = cond.v2_pre_completion_probes
+    summary["write_set"] = list(cond.v2_write_set)
+    summary["gate_probes"] = [p.target for p in cond.v2_gate_probes]
     summary["v2_grades"] = [i.grade.value for i in cond.v2_invalidations]
     summary["v2_targets"] = [i.target for i in cond.v2_invalidations]
     summary["run_dir"] = str(cond.run_dir)
