@@ -58,7 +58,10 @@ def compile_task(task_id: str, trace: TraceWriter) -> tuple[list, float]:
     appendix = surface_appendix(task, world_rev=1)  # SEEN-ONLY appendix (Rule Zero)
     soft, results = compile_assumptions(plan, appendix, trace)
     raw = [a.surface for a in soft.assumptions] if soft else []
-    grounded = sorted({g for g in (ground_surface(s, SAMPLES, ROUTES) for s in raw) if g})
+    # D32: ground_surface returns a SurfaceGrounding; a family template now flattens to
+    # every bounded family member (family-level extraction recall, unchanged substring hit).
+    grounded = sorted({m for s in raw
+                       for m in ground_surface(s, SAMPLES, ROUTES).members})
     return grounded, round(sum(r.cost_usd for r in results), 6)
 
 
