@@ -1408,3 +1408,28 @@ paid-probe-per-run-length COUNT submetric, not the dollar gate. Report the count
 membership comes from the seen/synthetic surface enumeration, never escrow; the one-shot matrix
 is NOT run; the fix is behind the v2 flag (flag off byte-identical to Phase 1, banked replay
 27/27 restored). Category-blind and injection-blind throughout.
+
+### Close (validation; build record in `decisions/v2_d32_close_2026-06-15.md`)
+
+Implemented in `sentinel_v2/compile_probes.py` only (`_instantiate` returns the full sorted
+family; `ground_surface`→`SurfaceGrounding`; `compile_pipeline` routes each member through the
+existing per-surface policy). LLM compile prompt **byte-unchanged** (sha256 unchanged);
+D28/D29/D30/D31 module paths **untouched**. Suite **390→399** both flag states; byte-identity
+**27/27** both. Nine D32 unit tests (`tests/test_v2_d32_family_grounding.py`).
+
+- **C2(a) full seen sweep** (real V2Conductor, `runs/v2_d31_revalidate`): all 5 categories DETECT
+  for the right reason, all 3 clean QUIET — identical to the D31 C5 baseline, **no regression**;
+  FIR 0.0; $3.85.
+- **C2(b) decisive generic variant** (`analysis/v2_d32_generic.py controlled`): the canonical
+  generic-naming soft set (family template + `/content` lens, NO concrete id) through the real
+  path. D32 arms the **full 6-member** family as `/content` value probes; pol-returns covered as
+  a family member; doc_contradiction **DETECTED** (value_changed, arm-baseline@1 < injection@6,
+  1 int/1 replan); clean QUIET. **A/B:** the old `sorted(glob)[0]`=`ops-shipping` MISSES
+  pol-returns; D32 covers it. Concrete c1 plan still detects (no regression).
+- **Count submetric:** family template arms 6 vs 1 in the generic case (**+5** arm-probes), $0
+  dollars; neutral-to-fewer in the concrete seen cells. KG3 unaffected.
+- **Residual:** detecting a content-only swap also needs a content/value lens on the armed member
+  (a lens/extraction property, orthogonal to D32 grounding). A real-LLM generic plan armed
+  pol-returns but assigned a structure lens → content swap invisible (`summary_real_llm_plan.json`).
+
+No held-out read or run; the one-shot matrix NOT run; no push.
