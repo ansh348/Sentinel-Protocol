@@ -56,7 +56,16 @@ def injection_info(events: list[dict]) -> Optional[dict]:
 def surface_predicate(inj_type: str, params: dict) -> Callable[[str, Any], bool]:
     if inj_type in ("endpoint_404", "gate_skip_trap"):
         pattern = params.get("path", "*")
-        return lambda path, status: bool(path) and fnmatchcase(path, pattern)
+        # D31: the §4 gate is observed through its read-only SHADOW surface
+        # (/repo/validate -> /repo/gate_status), so a gate_skip_trap interrupt the v2
+        # stack raises on the shadow is attributable to the injection even when no
+        # worker ever reached the gate itself. Instrument-level surface mapping (the
+        # benchmark fact), not a category cue in the detector.
+        _SHADOW = {"/repo/validate": "/repo/gate_status",
+                   "/docs/validate": "/docs/gate_status"}
+        shadow = _SHADOW.get(pattern)
+        return lambda path, status: bool(path) and (
+            fnmatchcase(path, pattern) or (shadow is not None and path == shadow))
     if inj_type == "schema_drift":
         prefix = "/repo" if params.get("target") == "repo_config" else "/pricing"
         return lambda path, status: bool(path) and path.startswith(prefix)

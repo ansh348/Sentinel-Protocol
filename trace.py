@@ -70,6 +70,11 @@ EVENT_TYPES = frozenset({
     # for each surface, recorded so a run is byte-replayable. Deterministic, no
     # LLM. Emitted only under the v2 flag; banked Phase-1 traces have none.
     "corroboration",
+    # v2 UNCOVERED valve (D29 §4; D31): a load-bearing surface that could not be
+    # certified — an unreachable sweep target, or a write-surface footprint with no
+    # checkable expected post-state — recorded LOUDLY (caution; scored by C7), never
+    # silently dropped. Emitted only under the v2 flag; banked traces have none.
+    "uncovered",
 })
 
 USAGE_FIELDS = ("input_tokens", "output_tokens", "cost_usd", "model", "session_id")

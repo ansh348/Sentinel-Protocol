@@ -320,11 +320,15 @@ class V2Conductor(Conductor):
         except Exception:
             return None
 
-    def _record_invalidations(self, invs, *, subplan_id, counter, where) -> list:
+    def _record_invalidations(self, invs, *, subplan_id, counter, where,
+                              emit_interrupt: bool = False) -> list:
         """D29 wobble dedup + escalation, shared by the worker barrier and the
         pre-completion sweep. Returns the NEW interrupt-grade invalidations (a
         re-detection of an already-open surface coalesces into a suppressed_refire —
-        never a new interrupt or replan, so a sustained violation cannot flood)."""
+        never a new interrupt or replan, so a sustained violation cannot flood).
+        `emit_interrupt` records the M6 `interrupt` detection marker directly — used
+        by the pre-completion path, which detects but does not replan (the barrier
+        path instead emits its `interrupt` through the replan)."""
         new = [i for i in invs if i.target not in self.v2_interrupted_surfaces]
         for inv in invs:
             if inv.target in self.v2_interrupted_surfaces:
@@ -344,14 +348,27 @@ class V2Conductor(Conductor):
                                                   "grade": inv.grade.value},
                                      "subplan_id": subplan_id, "counter": counter,
                                      "where": where})
+            if emit_interrupt and inv.grade is Grade.INTERRUPT:
+                # the M6 detection marker for a pre-completion interrupt (no replan)
+                self.trace.emit(actor="conductor", event_type="interrupt",
+                                payload={"tripwire_id": f"v2_probe::{inv.target}",
+                                         "evidence": {"_path": inv.target},
+                                         "where": where, "counter": counter})
         return [i for i in new if i.grade is Grade.INTERRUPT]
 
     def _v2_worker_barrier(self, outcome, executor, pending) -> None:
         if not self.v2_probes:
             return
         self._harvest_into_baselines()
+        # PRE_COMPLETION probes (the §4 gate shadow, whole-payload) are NOT fired at a
+        # barrier — they belong to the guaranteed pre-completion sweep. Firing the
+        # gate shadow at a barrier would route its detection through a mid-run replan
+        # (re-running the worker, and a flaky orchestrator reply can abort the run);
+        # the shadow is observable only on the side channel anyway, so the sweep is
+        # its proper home.
         barrier_probes = [p for p in self.v2_probes
-                          if p.target in self._worker_surfaces(outcome)]
+                          if p.target in self._worker_surfaces(outcome)
+                          and p.cadence_hint.value != "pre_completion"]
         if not barrier_probes:
             return
         # §8 same token: reuse the v2 token the arm-time baseline was captured with
@@ -399,23 +416,24 @@ class V2Conductor(Conductor):
                 baselines=self.v2_baselines, queries=self.v2_query, judge=self._judge,
                 emit=lambda et, p: self.trace.emit(actor="sentinel_v2",
                                                    event_type=et, payload=p))
+            self.v2_pre_completion_probes += len(res["swept"])
+            self.v2_observed_surfaces.update(res["reachable"])
+            # a pre-completion detection emits its own M6 interrupt marker (no replan)
+            self._record_invalidations(res["invalidations"], subplan_id="pre_completion",
+                                       counter=self._current_counter(),
+                                       where="v2_pre_completion_sweep",
+                                       emit_interrupt=True)
+            self.trace.emit(actor="sentinel_v2", event_type="corroboration",
+                            payload={"layer": "v2_pre_completion_sweep",
+                                     "swept": res["swept"], "reachable": res["reachable"],
+                                     "uncovered": res["uncovered"]})
+            self._evaluate_write_footprints(client, token)
         except Exception as exc:                 # the sweep never crashes the run
             self.trace.emit(actor="sentinel_v2", event_type="error",
                             payload={"where": "v2_pre_completion_sweep",
                                      "detail": str(exc)[:200]})
-            return
         finally:
             client.close()
-        self.v2_pre_completion_probes += len(res["swept"])
-        self.v2_observed_surfaces.update(res["reachable"])
-        self._record_invalidations(res["invalidations"], subplan_id="pre_completion",
-                                   counter=self._current_counter(),
-                                   where="v2_pre_completion_sweep")
-        self.trace.emit(actor="sentinel_v2", event_type="corroboration",
-                        payload={"layer": "v2_pre_completion_sweep",
-                                 "swept": res["swept"], "reachable": res["reachable"],
-                                 "uncovered": res["uncovered"]})
-        self._evaluate_write_footprints(client, token)
 
     def _evaluate_write_footprints(self, client, token) -> None:
         """D31 C4 write-surface policy, evaluated on the FINAL state (pre-completion).
@@ -458,7 +476,7 @@ class V2Conductor(Conductor):
         if drifts:
             self._record_invalidations(drifts, subplan_id="pre_completion",
                                        counter=self._current_counter(),
-                                       where="v2_write_footprint")
+                                       where="v2_write_footprint", emit_interrupt=True)
 
     def _v2_replan(self, inv, outcome, executor, pending) -> None:
         paused = self.pause_workers("global", [], outcome.instance_id)
