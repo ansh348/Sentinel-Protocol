@@ -46,10 +46,17 @@ class V2Conductor(Conductor):
         self.v2_probes: list = []
         self.v2_baselines: dict = {}          # surface -> earliest clean §8 read (the baseline)
         self.v2_invalidations: list = []      # DISTINCT corroborated invalidations (deduped)
-        self.v2_query: dict = {}              # surface -> the worker's query (§8 same projection)
+        self.v2_query: dict = {}              # surface -> the baseline's query (§8 same projection)
         self.v2_interrupted_surfaces: set = set()   # D29 wobble dedup: one open per surface
         self.v2_coalesced = 0                 # re-detections of an already-open surface
         self.v2_interrupts = 0                # INTERRUPT-grade invalidations that replanned
+        # D30 arm-time capture state
+        self._v2_token: Optional[str] = None  # one worker-class token reused by all v2 probes
+        self._arm_time_captured = False
+        self.v2_arm_capture_counter: Optional[int] = None   # main counter when the sweep ran
+        self.v2_baseline_source: dict = {}    # surface -> "arm_time" | "harvest"
+        self.v2_baseline_counter: dict = {}   # surface -> main counter when its baseline was captured
+        self.v2_arm_probes = 0                # arm-time probe count (the submetric delta)
 
     # -- v2 compile replaces the v1 tripwire compile/arm ----------------------
     def compile_and_arm(self) -> None:
@@ -59,16 +66,82 @@ class V2Conductor(Conductor):
         if soft is None:
             raise RunAbort("compile_failed", "v2 compile produced no soft set")
         cr = compile_pipeline(soft, world_rev=int(self.task.get("world_rev", 1)))
-        # keep-not-flush (D2/D29): keep prior probes, add new ones (dedup by target)
-        by_target = {p.target: p for p in self.v2_probes}
+        # keep-not-flush (D2/D29): keep prior probes, add new ones. Dedup by probe
+        # IDENTITY (target + shape + lens), NOT by target alone — a surface can carry
+        # several load-bearing assumptions (e.g. a schema-shape AND a value probe on
+        # /pricing); collapsing to one per target would silently drop the shape that
+        # catches a field rename.
+        def _key(p):
+            return (p.target, p.fault_shape, p.lens.op, p.lens.pointer,
+                    p.lens.header_name, p.lens.field)
+        by_key = {_key(p): p for p in self.v2_probes}
         for p in cr.probes:
-            by_target[p.target] = p
-        self.v2_probes = list(by_target.values())
+            by_key[_key(p)] = p
+        self.v2_probes = list(by_key.values())
         self.trace.emit(actor="sentinel_v2", event_type="tripwire_set",
                         payload={"layer": "v2_probes", "plan_id": soft.plan_id,
                                  "revision": self.plan.revision,
                                  "count": len(self.v2_probes),
                                  "targets": [p.target for p in self.v2_probes]})
+        # D30: the GUARANTEED clean reference. Fire the arm-time sweep ONCE, at run
+        # start (the first compile, before any worker tool call). Replan recompiles do
+        # NOT re-capture (they run mid-run / post-injection — not clean).
+        if not self._arm_time_captured:
+            self._arm_time_captured = True
+            self._arm_time_capture()
+
+    def _acquire_v2_token(self) -> Optional[str]:
+        """One worker-class token, reused by every v2 probe (arm-time + barriers) so the
+        baseline and its later comparisons share the same token/principal (§8 same auth).
+        Acquired via the main path (a single call inside the clean window); never root."""
+        if self._v2_token is None:
+            try:
+                resp = self._admin("POST", "/auth/token", headers={"X-Worker-Id": "w1"})
+                self._v2_token = resp.json().get("token")
+            except Exception:
+                self._v2_token = None
+        return self._v2_token
+
+    def _arm_time_capture(self) -> None:
+        """D30: proactively observe every load-bearing surface ONCE through the side
+        channel, before any worker tool call, and record the earliest clean §8 read as
+        the guaranteed baseline. Category-blind and injection-blind; reads only; the
+        bare surface (no query) — a worker harvest later supplies a query-bearing
+        projection for surfaces this misses. Side-channel reads do not advance the
+        injection clock, so the sweep is in the clean window by construction."""
+        if not self.v2_probes:
+            return
+        from sentinel_v2.probes import ProbeExecutor
+        token = self._acquire_v2_token()
+        try:
+            counter = self._admin("GET", "/admin/state").json().get("counter")
+        except Exception:
+            counter = None
+        self.v2_arm_capture_counter = counter
+        client = httpx.Client(base_url=self.base_url, timeout=10)
+        ex = ProbeExecutor(client, auth_token=token)
+        captured = []
+        try:
+            for target in dict.fromkeys(p.target for p in self.v2_probes):  # unique, in order
+                self.v2_arm_probes += 1
+                try:
+                    obs = ex.get(target)            # bare surface, no query
+                except Exception:
+                    continue
+                # §8 clean-baseline criterion: a side-effect-free worker-class GET,
+                # cache-fresh, captured pre-transform, with a present body — serves every
+                # shape probe on the surface (schema/field/hash diff against it later).
+                if obs.status is not None and obs.status < 400 and obs.body is not None:
+                    self.v2_baselines[target] = obs
+                    self.v2_query[target] = ""      # arm-time projection (no query)
+                    self.v2_baseline_source[target] = "arm_time"
+                    self.v2_baseline_counter[target] = counter
+                    captured.append(target)
+        finally:
+            client.close()
+        self.trace.emit(actor="sentinel_v2", event_type="corroboration",
+                        payload={"layer": "v2_arm_baseline", "capture_counter": counter,
+                                 "captured": captured, "probed": self.v2_arm_probes})
 
     # -- drain with the v2 worker barrier -------------------------------------
     def drain(self, executor, pending: dict[Future, str]) -> None:
@@ -130,9 +203,16 @@ class V2Conductor(Conductor):
                                   result=result)
                 if harvest_equivalence(read, expected_surface=path, lens=probe.lens,
                                        expected_principal=actor).ok:
+                    # D30: a worker harvest fills surfaces the arm-time sweep MISSED
+                    # (e.g. query-required surfaces); it never overwrites an arm-time
+                    # baseline (the guaranteed source) — `path in self.v2_baselines`
+                    # above already skips those, so a post-injection read cannot poison
+                    # a clean arm-time reference.
                     self.v2_baselines[path] = result
                     # §8 same projection: the probe must replay the worker's query
                     self.v2_query[path] = query
+                    self.v2_baseline_source[path] = "harvest"
+                    self.v2_baseline_counter[path] = c
 
     def _worker_surfaces(self, outcome) -> set:
         """The probe surfaces this worker actually touched (its output-dependency
@@ -157,7 +237,9 @@ class V2Conductor(Conductor):
                           if p.target in self._worker_surfaces(outcome)]
         if not barrier_probes:
             return
-        token = self._last_observed_token()
+        # §8 same token: reuse the v2 token the arm-time baseline was captured with
+        # (falls back to the worker's latest token if the arm-time acquisition failed).
+        token = self._v2_token or self._last_observed_token()
         client = httpx.Client(base_url=self.base_url, timeout=10)
         try:
             det = run_v2_detection(barrier_probes, client, auth_token=token,
@@ -250,4 +332,25 @@ def run_v2_loop(*, task_path, injection=None, n_inject=None, seed=1,
     summary["v2_grades"] = [i.grade.value for i in cond.v2_invalidations]
     summary["v2_targets"] = [i.target for i in cond.v2_invalidations]
     summary["run_dir"] = str(cond.run_dir)
+    # D30 right-reason fields
+    summary["arm_capture_counter"] = cond.v2_arm_capture_counter
+    summary["arm_probes"] = cond.v2_arm_probes
+    summary["baseline_source"] = dict(cond.v2_baseline_source)
+    summary["baseline_counter"] = dict(cond.v2_baseline_counter)
+    # injection call-index from the world trace (None on a clean cell)
+    inj_counter = None
+    from trace import read_trace
+    wt = cond.run_dir / "trace_world.jsonl"
+    if wt.exists():
+        for e in read_trace(wt):
+            if e["event_type"] == "injection_fired":
+                inj_counter = e["payload"].get("counter")
+                break
+    summary["injection_counter"] = inj_counter
+    # the detected surfaces' baseline provenance (for the right-reason assertion)
+    summary["detected_baselines"] = [
+        {"target": i.target, "grade": i.grade.value,
+         "baseline_source": cond.v2_baseline_source.get(i.target),
+         "baseline_counter": cond.v2_baseline_counter.get(i.target)}
+        for i in cond.v2_invalidations]
     return summary

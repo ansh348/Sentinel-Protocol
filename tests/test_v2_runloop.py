@@ -11,6 +11,7 @@ from conductor.run_v2_loop import V2_SYSTEM, V2J_SYSTEM, V2Conductor
 from sentinel_v2.probe_spec import (CadenceHint, Comparison, CostClass,
                                     EvidenceClass, FaultShape, Lens, LensOp, Probe,
                                     Provenance)
+from sentinel_v2.probes import ProbeResult
 
 PRICING = "/pricing/quote/WID-001"
 
@@ -127,6 +128,46 @@ def test_only_earliest_clean_read_is_the_baseline(tmp_path):
 
 
 # -- per-worker surfaces ------------------------------------------------------
+
+# -- D30: the arm-time baseline is the guaranteed source (refresh-not-replace) ----
+
+def test_harvest_does_not_replace_an_arm_time_baseline(tmp_path):
+    cond = _cond(tmp_path)
+    cond.v2_probes = [_probe(PRICING)]
+    # arm-time captured a clean baseline (the guaranteed source) at counter 0
+    cond.v2_baselines[PRICING] = ProbeResult(method="GET", path=PRICING, status=200,
+                                             headers={}, body={"sku": "WID-001",
+                                                               "unit_price": 19.68})
+    cond.v2_query[PRICING] = ""
+    cond.v2_baseline_source[PRICING] = "arm_time"
+    cond.v2_baseline_counter[PRICING] = 0
+    try:
+        # a LATER (post-injection) clean-status worker read must NOT overwrite it,
+        # or a drifted-but-200 read would poison the clean reference
+        _write_world_trace(cond, [
+            _call(20, PRICING), _resp(20, 200, {"sku": "WID-001", "price": 5}),
+        ])
+        cond._harvest_into_baselines()
+        assert cond.v2_baseline_source[PRICING] == "arm_time"      # not replaced
+        assert cond.v2_baselines[PRICING].body["unit_price"] == 19.68
+    finally:
+        cond.trace.close()
+
+
+def test_harvest_fills_a_surface_the_arm_sweep_missed(tmp_path):
+    cond = _cond(tmp_path)
+    cond.v2_probes = [_probe(PRICING)]
+    try:
+        # no arm-time baseline for PRICING -> a clean worker read fills it (harvest)
+        _write_world_trace(cond, [
+            _call(3, PRICING), _resp(3, 200, {"sku": "WID-001", "unit_price": 19.68}),
+        ])
+        cond._harvest_into_baselines()
+        assert cond.v2_baseline_source[PRICING] == "harvest"
+        assert cond.v2_baseline_counter[PRICING] == 3
+    finally:
+        cond.trace.close()
+
 
 def test_worker_surfaces_from_trace(tmp_path):
     cond = _cond(tmp_path)
