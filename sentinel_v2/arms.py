@@ -29,9 +29,10 @@ from typing import Any, Optional
 from sentinel_v2.corroboration import (CorroboratedInvalidation, Grade, Signal,
                                        corroborate)
 from sentinel_v2.flags import v2_enabled
-from sentinel_v2.probe_spec import Comparison, FaultShape
+from sentinel_v2.gate_route import DOCS_GATE_SHADOW, evaluate_gate_probe
+from sentinel_v2.probe_spec import Comparison, FaultShape, LensOp
 from sentinel_v2.probes import ProbeExecutor
-from sentinel_v2.typing_engine import BaselineObligations, Invariant
+from sentinel_v2.typing_engine import BaselineObligations, Invariant, Verdict
 
 # Arm ids. The v2 ids were PROVISIONAL through the night shift; ratified here as the
 # registered matrix arms (P3 designations unchanged).
@@ -178,6 +179,23 @@ def run_v2_detection(probes, client, *, auth_token: Optional[str] = None,
     invalidations = []
     signals = []
     for p in probes:
+        # GATE-SHADOW / premise probes (D31 C3): a §4 gate probe is a HARD invariant
+        # `enforcing == True` evaluated by evaluate_gate_probe — NOT a content diff and
+        # NOT the generic empty-Invariant() the rest of the HARD_INVARIANT path built
+        # (which returned CLEAN for a trapped gate). It fires on its own (Break-A, no
+        # baseline); a missing worker auth context is DISQUALIFIED, never a fast-path
+        # 401. Routed before the status fast path so a 401 on an authed gate cannot
+        # masquerade as a surface-state interrupt.
+        if p.lens.op is LensOp.GATE_SHADOW:
+            ev = evaluate_gate_probe(p, ex, requires_auth=(p.target == DOCS_GATE_SHADOW))
+            if ev.verdict is Verdict.INTERRUPT:
+                invalidations.append(CorroboratedInvalidation(
+                    target=p.target, grade=Grade.INTERRUPT,
+                    fault_shape=p.fault_shape.value,
+                    evidence_class=p.evidence_class.value,
+                    reason=f"gate stopped enforcing (enforcing != True): {ev.reason}",
+                    witness=ev.witness))
+            continue
         q = queries.get(p.target)
         params = dict(parse_qsl(q)) if q else None
         obs = [ex.get(p.target, params=params),         # first look + one confirming re-look
