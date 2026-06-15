@@ -252,16 +252,24 @@ def v2_result(arm_id: str, detection: dict, *, total_cost_usd: float = 0.0,
 
 def dispatch(arm_id: str, *, task_path, injection=None, n_inject=None, seed: int = 1,
              runs_root="runs", max_replans: int = 2,
-             heartbeat_k: Optional[int] = None) -> ArmResult:
+             heartbeat_k: Optional[int] = None,
+             injection_params: Optional[dict] = None) -> ArmResult:
     """Run one cell on one arm through the actual matrix-runner path and collect a
-    normalized ArmResult. Caller supplies only SEEN cells (this function never reads or
-    loads a held-out cell)."""
+    normalized ArmResult.
+
+    `injection_params` is an ADDITIVE pass-through (default None = byte-identical to the
+    prior signature; every existing/seen caller is unchanged): when a launch cell carries
+    drawn injection-param overrides (the 1b matrix runner feeds these straight from the
+    escrow loader's opaque per-cell params), they are forwarded VERBATIM to the conductor's
+    injection spec — exactly the override `run_one`/`Conductor` already accept
+    (run_one.py:332). It touches no detection logic and is never inspected here (Rule
+    Zero: the value may be a sealed held-out draw)."""
     spec = resolve_arm(arm_id)
     if spec.is_v2:
         from conductor.run_v2_loop import V2Conductor
         cond = V2Conductor(task_path=task_path, injection=injection, n_inject=n_inject,
                            seed=seed, runs_root=runs_root, judge=spec.judge,
-                           max_replans=max_replans)
+                           max_replans=max_replans, injection_params=injection_params)
         summary = cond.run()
         res = collect_arm_result(cond.run_dir, arm_id)        # M6 instrument (parity)
         res.source = "v2_runloop"
@@ -275,5 +283,6 @@ def dispatch(arm_id: str, *, task_path, injection=None, n_inject=None, seed: int
     from conductor.run_one import run_one
     summary = run_one(task_path=task_path, system_id=spec.id, injection=injection,
                       n_inject=n_inject, seed=seed, runs_root=runs_root,
-                      max_replans=max_replans, heartbeat_k=heartbeat_k)
+                      max_replans=max_replans, heartbeat_k=heartbeat_k,
+                      injection_params=injection_params)
     return collect_arm_result(summary["run_dir"], arm_id)
