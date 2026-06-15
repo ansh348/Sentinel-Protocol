@@ -1328,3 +1328,83 @@ honors the D29 budget cap and routes anything it cannot reach to the uncovered v
 **Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell touched; the
 fix is behind the v2 flag (flag off byte-identical to Phase 1, banked replay restored).
 Category-blind and injection-blind throughout.
+
+---
+
+## D32 — Family-template grounding (under-coverage fix; replaces lexicographic-first instantiation)
+
+**Date:** 2026-06-15 (grounding-rate-diagnosis follow-up; written BEFORE the fix code, C0).
+**Affects:** `sentinel_v2/compile_probes.py` only — the DETERMINISTIC grounding/instantiation
+layer (`_instantiate`, `ground_surface`, `compile_pipeline`). The LLM **compile prompt and
+few-shot are byte-unchanged** (asserted at close): this is a substrate grounding
+generalization, the sibling of D5/D8 dialect tolerance and D24 pattern-liveness, NOT a prompt
+change. AMENDS D4 (compile) via the §7 mechanism; **D28/D29/D30/D31 are preserved** — each
+armed family member composes with the EXISTING per-surface policy, nothing is bypassed.
+Category-blind and injection-blind throughout.
+
+### Why (the diagnosis D32 answers)
+
+The grounding-rate diagnosis (`analysis/v2_doc_grounding_rate.py`,
+`runs/v2_doc_grounding_rate/summary.json`; memory `tripwirebench-pilot-build`) isolated the
+c1+doc_contradiction compile (plan held FIXED, N=10 independent Sonnet compiles, world=None)
+and found the **compile reliable** (10/10 ground the value probe on `/docs/passages/pol-returns`
+under the concrete-naming plan) but localized a **deterministic substrate under-coverage bug**.
+When the model emits a **family-level template** (e.g. `/docs/passages/{passage_id}`),
+`compile_probes._instantiate` globs (`/docs/passages/*`), `sorted()`, and takes **`[0]`** — it
+arms exactly ONE lexicographically-first member of a family the integrity property spans
+(`/docs/passages/ops-shipping`, not the load-bearing one). The bug is HARMLESS in c1 **only**
+because the plan ALSO names `pol-returns` concretely (s1 fetch + s4 citations), so the family
+template is additive — the concrete `pol-returns` /content value probe catches the swap
+regardless. Under a plan that names retrieval **generically with no concrete passage id**, the
+family template is the **only** passage probe, the lexicographic pick watches the wrong member,
+and the cell **MISSES**. The locus is plan-shaped (the residual the diagnosis named and did not
+spend the generic-plan run on); the fix is in the substrate, not the prompt.
+
+### The ruling (D32)
+
+**Family-template grounding (replaces `sorted(glob)[0]`).** Where a compiled probe targets a
+**family-level template** (a normalized surface containing a `{param}` segment), the substrate
+grounds it by a deterministic, category-blind, injection-blind rule, in priority order:
+
+1. **Plan-named ids, if the plan provides them.** Ground the template to exactly the concrete
+   family members the soft set names DIRECTLY — i.e. the real, groundable concrete paths
+   (`classify_url_pattern(surface) is not None`) that other assumptions in the SAME compiled set
+   carry and that fall inside the template's family glob. These are the ids the plan named (the
+   model emits a concrete surface because the plan referenced it); they come from the
+   plan/soft-set, **never** from the injection or any escrow. (Under the concrete c1 plan this
+   grounds the `/docs/passages/{passage_id}` template to `{pol-returns}` — the same member
+   already covered by its own value probe; coverage is unchanged, no regression.)
+2. **Else, all bounded family members.** With no plan-named member, arm EVERY member of the
+   family enumerable from the rev's mechanical sample set (`path_samples_for_rev`), within the
+   budget cap. (Under a generic plan this arms all six passages; `pol-returns` is covered
+   **because it is a family member**, never because it was named or is the injected one.)
+3. **Else (no bounded membership), UNCOVERED_CAUTION.** A template family the sample set cannot
+   bound has no representative to arm honestly → route to the D29 uncovered valve (loud), not a
+   silent drop and not a single arbitrary pick.
+
+**Compose, do not bypass.** Each armed family member is registered as a load-bearing surface and
+monitored by the **existing** per-surface policy — a planned-write member goes through the **D31**
+write-footprint policy (NOT a naive drift probe, or the clean false positive returns), a
+gate-shadow member through `compile_gate_probe`/`evaluate_gate_probe`, a read member gets the
+**D30** arm-time baseline + drift. D32 only changes WHICH concrete surfaces the family resolves
+to; routing is untouched.
+
+**Budget valve (D29).** At most `FAMILY_MEMBER_CAP` members arm per family; members beyond the
+cap route to **UNCOVERED_CAUTION** (loud), never a silent truncation. The real seen families are
+small (passages 6, SKUs 6, repo files 8) — all fit; the cap is the matrix backstop.
+
+**Invented-id grounding unchanged.** The D5/D8 invented-concrete-id path (the model names a real
+route but fabricates the id, e.g. `/pricing/quote/SKU-001`) still grounds to a single real
+representative — that is a single intended member, not a family reference; D32 is scoped to the
+`{param}` template form only. A concrete hallucinated surface still fails LOUDLY (N2 / GroundingError).
+
+### Budget impact
+
+Dollars: **$0** — grounding is deterministic and side-channel; KG3 (total_cost_usd) unaffected.
+The added probe **COUNT** (a family template arming N members instead of 1) is reported on the
+paid-probe-per-run-length COUNT submetric, not the dollar gate. Report the count delta at close.
+
+**Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell touched; family
+membership comes from the seen/synthetic surface enumeration, never escrow; the one-shot matrix
+is NOT run; the fix is behind the v2 flag (flag off byte-identical to Phase 1, banked replay
+27/27 restored). Category-blind and injection-blind throughout.
