@@ -1433,3 +1433,40 @@ D28/D29/D30/D31 module paths **untouched**. Suite **390→399** both flag states
   pol-returns but assigned a structure lens → content swap invisible (`summary_real_llm_plan.json`).
 
 No held-out read or run; the one-shot matrix NOT run; no push.
+
+---
+
+## D33 — V2J deferred from the confirmatory one-shot (pre-fire decision; documented only)
+
+**Date:** 2026-06-15 (pre-fire runway clearance, before the Phase-1b matrix fires). **Affects:**
+the launch manifest's arm set for the confirmatory one-shot — a DECISION ONLY. No run
+configuration, arm wiring (`sentinel_v2/arms.py`), or threshold is changed by this entry.
+AMENDS the reporting-arm set of `decision_memo_phase1.md` §2/§4 and `prereg_1b.md` §1 via the §7
+deviation mechanism; the V2-primary / S1 / S2-mandatory / S3 structure is otherwise untouched.
+
+### Ruling
+
+The confirmatory one-shot fires on **four arms — V2 (two-tier, designated primary), S1 (batch),
+S2 (naive interrupt, mandatory head-to-head under the honesty clause), and S3 (cost-matched
+heartbeat)**. The fifth registered arm, **V2J (the rebuilt-judge tier), is DEFERRED** to a later,
+separate, explicitly **exploratory** pass.
+
+### Rationale
+
+V2J's judge tier is **unbuilt** — in the current registry it is a pass-through seam (the v2
+"judge" is corroboration, not the v1 judge; `V2J_SYSTEM.judge_enabled=False`,
+`sentinel_v2/arms.py`). Firing V2J in the confirmatory matrix now would consume one-shot budget on
+a **degenerate V2-clone** (identical detection behaviour to V2, no independent judge signal),
+adding no confirmatory information while inflating the cell count against the held-out draw. V2J
+was always **registered as exploratory, never co-primary** (decision_memo §2 P3: "no
+post-selection between [V2] and the rebuilt-judge arm, which runs as exploratory only"), so
+deferring it changes no pre-registered confirmatory claim. When the judge tier is actually built,
+V2J runs as a clearly-labelled exploratory comparison **outside** the confirmatory gate
+computation, with its own report.
+
+### Scope
+
+Documented decision only; **no compute, no arm wiring change, no escrow touch, no held-out read.**
+The four-arm confirmatory set and the V2-primary/S2-mandatory reporting rules (T1-confirmed
+byte-unchanged: `prereg_1b.md` @ `6c8cc47`, `decision_memo_phase1.md` @ `e808862`) stand. The
+one-shot matrix is NOT run by this entry.
