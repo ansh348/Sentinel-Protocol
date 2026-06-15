@@ -1230,3 +1230,101 @@ set at run start, so a surface discovered later has no arm-time clean reference,
 **Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell touched; the
 fix is behind the v2 flag (flag off byte-identical to Phase 1). Category-blind and
 injection-blind throughout.
+
+## D31 — Unified compile parameterization + pre-completion sweep + gate routing + write-surface footprint policy
+
+**Date:** 2026-06-15 (remaining-category-seen-check follow-up; written BEFORE the fix code,
+ratified by a two-model cold pass). **Affects:** `conductor/run_v2_loop.py` `V2Conductor`
+(the run-loop compile call + cadence), `sentinel_v2/compile_probes.py` / `attachment.py`
+(write-surface policy), `sentinel_v2/gate_route.py` (counter-neutral non-perturbation),
+`sentinel_v2/arms.py` (gate-probe evaluation), `sentinel_v2/cadence/` (the guaranteed
+pre-completion sweep, declared-but-unbuilt at D28/D29), and `world/server.py`
+(`/admin/state` exposes `validated_docs` count — additive, counter-excluded, byte-identity
+safe). AMENDS prereg_1b.md (6c8cc47), D28, D29, D30 via the §7 deviation mechanism.
+Category-blind and injection-blind throughout.
+
+### Why (the finding D31 fixes)
+
+The remaining-category seen check (decisions/v2_seen_remaining_check_2026-06-15.md) found two
+matrix-fatal issues, root-caused to ONE under-parameterized call plus two unbuilt/unwired
+pieces. `V2Conductor.compile_and_arm` (run_v2_loop.py:68) calls `compile_pipeline` WITHOUT
+`world`, `auth_token`, or `planned_write_set`:
+- dropping **world** → the §4 gate probe never arms (gate assumption → UNCOVERED→caution,
+  D1) → **TOOL_CONTRACT (gate_skip_trap) MISS**;
+- dropping **planned_write_set** → the worker's own legitimate write reads as drift →
+  **CLEAN FALSE POSITIVE** (b1+clean, FIR 1.0).
+Plus: the **guaranteed pre-completion sweep** (D29/D28 §3.1) is declared-but-unbuilt
+(corroboration.py:175), so a never-touched load-bearing surface (the gate shadow) is never
+re-observed; and **GATE_SHADOW probes** route to the generic empty-`Invariant()` evaluator
+instead of `evaluate_gate_probe` → CLEAN even if armed.
+
+### The ruling (D31)
+
+**Side-channel world handle (the critical fence).** The run loop passes `world` to
+`compile_pipeline` ONLY as a perturbation-isolated side-channel READ handle (the channel
+probes use, §3.2). The compile-time §4 non-perturbation read must NOT advance the
+injection-counting channel: the §4 read routes over the probe channel (counter-neutral,
+read-only by transport), and the non-perturbation trapdoor is measured counter-neutrally —
+all three vectors (counter, token-stream, validated_docs) via counter-excluded `/admin`
+reads around the §4 read, REPLACING the canary POST (a counting write). Compile runs at run
+start, before any injection, so it reads a clean world; it is a non-perturbation safety
+check, not a detection or category-learning step. ASSERTED: the injection call-index is
+identical with vs without the gate-probe compile on a seen cell.
+
+**Frozen D28 untouched.** The status fast path (status ≥ 400; request-malformation
+exclusions {400,405,422}) is byte-unchanged. No phase-aware/write-window status semantics
+(a cold-pass suggestion HELD as a separate deviation if ever). D28 persistence logic for
+non-write surfaces is unchanged; the write-surface epoch pre-check is ADDITIVE (a primary
+predicate for write surfaces only), exactly as D30 added arm-time capture without altering
+D28.
+
+**Write-surface policy (footprint scoping).**
+1. Planned writes are scoped to a FOOTPRINT (the specific paths/fields/regions the plan
+   declares the worker will mutate), NOT the whole surface. The footprint is derived from the
+   plan declaration, category-blind (never from any failure category).
+2. Everything OUTSIDE the footprint on a write surface is monitored against the D30 arm-time
+   baseline exactly like any other surface; an off-footprint change is drift.
+3. INSIDE the footprint: where the plan specifies the expected transition precisely enough to
+   verify (a named target with a checkable expected post-state or invariant), verify the
+   observation against it; a deviation is drift. Where it is NOT precisely specifiable, route
+   the footprint to UNCOVERED_CAUTION (loud, scored by C7), NEVER silent-passive and NEVER
+   raw re-baseline. (This REPLACES the old §3.3/A4 read-and-trust gate, which made the whole
+   write surface PASSIVE — silently un-monitored.)
+4. Persistence (D28) runs only AFTER the footprint/epoch-consistency check on a write surface.
+   The primary predicate for a write surface = "consistent with the authorized footprint
+   transition"; persistence is secondary, so a legitimate permanent write never
+   self-corroborates as drift.
+
+**Item 5 (conditional pieces) — resolved by the C0 corpus check.** The category-blind
+structural scan over the SEEN tasks (analysis/d31_corpus_check.py; runs/d31_corpus_check.json)
+found: **Q1 no seen task writes any single surface more than once; Q2 no seen surface is
+written by one worker and read by another** (b1 writes config/settings.yaml once by w1 and
+src/*.py once by w2; a1/c1/d1 write no content surface — only auth/gate/packaging endpoints).
+Therefore the policy stays **SINGLE-EPOCH**, and both conditional pieces are NAMED RESIDUALS:
+the ordered write-epoch sequence per surface (epoch0→W1→epoch1…) and the LIGHT cross-worker
+rule (a downstream read diffs against the committed epoch, not the arm-time baseline) are NOT
+built — no seen cell exercises them.
+
+### Named residuals (threats-to-validity; NOT built)
+
+- **Information-theoretic residual:** where some footprint degrees of freedom have no
+  independent expected post-state AND no monitored downstream read covers them, a legitimate
+  and an injected permanent change are indistinguishable; such a footprint is certified
+  "verified for the footprint and invariants, uncertified outside them" (UNCOVERED_CAUTION),
+  never silently clean.
+- **Healed-source-broken-derivative (taint) ordering:** not modeled.
+- **Phase-aware status:** HELD off the frozen D28 status fast path.
+- **Multi-write epoch sequence / cross-worker committed-epoch read** (item 5): not built; no
+  seen cell needs them (C0).
+
+### Budget impact
+
+Dollars: **~$0** — the §4 gate read, the pre-completion sweep, and all footprint checks are
+deterministic side-channel reads (no LLM); KG3 (total_cost_usd) is unaffected. The added
+probe COUNT (gate-shadow arm reads + the guaranteed pre-completion sweep) is reported on the
+paid-probe-per-run-length COUNT submetric, not the dollar gate. The pre-completion sweep
+honors the D29 budget cap and routes anything it cannot reach to the uncovered valve.
+
+**Scope:** no measured Phase-1 quantity changes; no benchmark or held-out cell touched; the
+fix is behind the v2 flag (flag off byte-identical to Phase 1, banked replay restored).
+Category-blind and injection-blind throughout.
