@@ -106,40 +106,35 @@ result that does not exist).
   deterministically and emitted as `probe_audit_worksheet.json`; the author's
   targeted/fresh/non-perturbing/independent verdicts (100%-or-exclude) are consumed via
   `audit['probe_validity_verdicts']`. No threshold change. (`prereg_1b.md` §2 + §4 AUTHOR-12.)
-- **P5 — #1 RB recoverable formula PROPOSED (ratification-pending; NOT frozen, NOT in code).** The
-  runner still emits the `RB_MECHANICAL_AT_LAUNCH` sentinel; the closed form is proposed below for
-  the author's sign-off and applied only after ratification, from sealed N/Q0, without printing them.
+- **P5 — #1 RB recoverable formula RATIFIED + FROZEN (author sign-off 2026-06-15).** Coded in
+  `analysis/matrix_runner.py` (`rb_recovery_class`); labels each RB cell at fire from the sealed
+  N/Q0 without printing them.
 
-### P5 proposal — "expected-remaining-required" closed form (RESOURCE_BUDGET.md §3) — AWAITING RATIFICATION
+### P5 — "expected-remaining-required" closed form (RESOURCE_BUDGET.md §3) — RATIFIED
 
 The consumed RB pair is **(a1, quota_cliff)** only (`escrow_loader.CONSUMED_HOLDOUT_PAIRS`); b1's DV
-is always-recoverable (`DEPENDENCY_VERSION.md` §3), so the formula is needed for a1 alone.
-
-`RESOURCE_BUDGET.md` §3: *"REPLAN-recoverable if Q0 ≥ expected remaining required, else
-RETREAT-condition,"* with expected-remaining-required = *"from the task's clean-median call profile
-at the drawn N."* §2 frames it as *"R further calls to the family … only re-paced calling completes
-within Q0,"* §4 makes both operands mechanical (*"the right from the plan's call ledger"*).
-
-**Proposed closed form (a1):**
+is always-recoverable (`DEPENDENCY_VERSION.md` §3), so the formula is a1-only.
 
 ```
-expected_remaining_required(N) = T_a1 − F_a1(N)
-REPLAN-recoverable  iff  Q0 ≥ expected_remaining_required(N)   else  RETREAT-condition
+expected_remaining_required(N) = RB_T_A1 − F_uniq(N)
+RECOVERABLE (REPLAN-recoverable)  iff  Q0 ≥ expected_remaining_required(N)   else  RETREAT_CONDITION
 ```
 
-- **T_a1 = 19** — total required family calls in a clean a1 run, itemized verbatim from §5's a1 row:
-  1 item list + 6 per-SKU item reads + 6 quotes + 6 us-east rates (family = `/inventory` `/pricing`
+- **RB_T_A1 = 19** — required family calls in a clean a1 run, itemized verbatim from §5's a1 row:
+  1 item list + 6 per-SKU item reads + 6 quotes + 6 us-east rates (family `/inventory` `/pricing`
   `/shipping`; `/auth` excluded).
-- **F_a1(N)** = number of family-prefix calls among the **first N tool calls** of a1's
-  **clean-median call profile** (the median-tool-call-count clean run's call ledger, §4; the same
-  clean-median basis §6 draws N from — a1 clean median 24, so N ∈ [9, 14], Q0 ∈ [8, 14]).
-- So `expected_remaining_required(N)` = the **unfetched remainder** of the 19 required family calls
-  at the injection point N (§5 "unfetched remainder" framing); REPLAN-recoverable iff the drawn Q0
-  covers that remainder.
+- **F_uniq(N)** = count of **DISTINCT REQUIRED** family calls completed in the first N tool calls of
+  a1's S1 batch clean-median call ledger. **Author ruling #1 (unique-required, spec-faithful):** §3
+  says *"remaining REQUIRED family calls"* and §2 says recovery *"dedupe, fetch only what the plan
+  still needs"* — so completions are counted UNIQUE, not raw (the batch re-lists `/inventory/items`
+  redundantly; raw would under-state the remainder by 2 and flip labels for some Q0/N).
+- **Profile — author ruling #2:** the canonical S1 batch clean-median run is **`a1-S1-clean-s1-3`**
+  (24 tool calls = §6's a1 median 24; complete with `/shipping`; the seed-1 D20/D21 re-run per
+  `manipulation_table_s1_seed1`; a SEEN clean run). The cumulative F_uniq(N), N=1..24, is FROZEN in
+  `matrix_runner.RB_F_UNIQUE_A1` = `(0,0,0,1,1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19)`.
+- Drawn ranges (§6): N ∈ [9, 14] (= [40%,60%]·24 floored), Q0 ∈ [8, 14]. ⇒ over the drawn N range,
+  expected_remaining_required = {9:15, 10:14, 11:13, 12:12, 13:11, 14:10}.
 
-**The one choice that needs the author's ruling:** which clean run defines the profile for F_a1(N) —
-proposed the **S1 (batch) clean-median** a1 run's call ledger (the wound is defined "under batch's
-natural pattern," §2, and S1 is the inherited clean-cost/profile reference), median seed by
-tool-call count. Confirm S1-vs-other-arm and the median-seed tie-break before freezing.
-
-**HALT:** not frozen, not committed to code, no RB cell labeled until ratified.
+Cite: `RESOURCE_BUDGET.md` §3/§5/§6; `prereg_1b.md` §3a; rulings recorded here. Applied at fire from
+the sealed N/Q0; the RB cell enters the ledger as `RECOVERABLE` / `RETREAT_CONDITION` (label only,
+no drawn value). Unit-tested (`test_rb_recovery_class_ratified_formula`).

@@ -58,12 +58,13 @@ def test_cell_identity_is_seal_safe():
                       _params={"q0": FAKE_PARAM})
     ident = MR.cell_identity(cell, slot_index=3)
     blob = json.dumps(ident)
-    # NO drawn value (seed / n_inject / param) may appear in the public identity
+    # NO drawn value (seed / n_inject / param) may appear in the public identity — only the
+    # computed LABEL (the RATIFIED RB formula ran on the sealed N/Q0 and surfaced no value).
     for secret in (str(FAKE_SEED), str(FAKE_N), str(FAKE_PARAM)):
         assert secret not in blob
     assert ident["slot"] == 3                      # positional index stands in (public)
     assert ident["category"] == "RESOURCE_BUDGET"
-    assert ident["recovery_class"] == "RB_MECHANICAL_AT_LAUNCH"
+    assert ident["recovery_class"] in ("RECOVERABLE", "RETREAT_CONDITION")  # labeled, not the value
 
 
 def test_enumerate_honors_d23_skips_synthetic(tmp_path):
@@ -201,6 +202,23 @@ def test_replay_run_dir_none_without_world_trace(tmp_path):
     d = tmp_path / "r"; d.mkdir()
     (d / "trace.jsonl").write_text("", encoding="utf-8")
     assert MG.replay_run_dir(d) is None                    # no replayable world trace
+
+
+def test_rb_recovery_class_ratified_formula():
+    # RATIFIED: RECOVERABLE iff Q0 >= 19 - F_uniq(N); a1-S1-clean-s1-3 profile.
+    # F_uniq: N=9->4 (ERR15), N=12->7 (ERR12), N=14->9 (ERR10).
+    assert MR.rb_recovery_class(12, 12) == "RECOVERABLE"        # 12 >= 12
+    assert MR.rb_recovery_class(12, 11) == "RETREAT_CONDITION"  # 11 < 12
+    assert MR.rb_recovery_class(9, 15) == "RECOVERABLE"         # 15 >= 15
+    assert MR.rb_recovery_class(9, 14) == "RETREAT_CONDITION"   # 14 < 15
+    assert MR.rb_recovery_class(14, 10) == "RECOVERABLE"        # 10 >= 10
+    assert MR.rb_recovery_class(None, None) == "RB_MECHANICAL_AT_LAUNCH"  # defensive
+    # the runner labels a sealed RB cell from N/Q0 (label only; no value surfaced)
+    cell = SealedCell(kind="holdout", task="a1", injection="quota_cliff", slot=None,
+                      category="RESOURCE_BUDGET", _seed=FAKE_SEED, _n_inject=12,
+                      _params={"q0": 12})
+    assert MR.recovery_class(cell) == "RECOVERABLE"
+    assert str(FAKE_SEED) not in json.dumps(MR.cell_identity(cell, 0))   # seal-safe
 
 
 def test_compute_gates_accepts_runs_root_and_survives_empty(tmp_path):

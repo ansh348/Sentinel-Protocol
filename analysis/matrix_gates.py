@@ -209,12 +209,12 @@ def gate_1bKG1(rows, audit: dict) -> dict:
     # Held-out denominator notes (counting allowed; values unread).
     heldout = {"dv_recoverable_cells": sum(1 for r in inj
                                            if r["injection"] == "silent_minor_bump"),
-               "rb_mechanical_at_launch_cells": len(rb_mech),
+               "rb_unlabeled_cells": len(rb_mech),     # >0 only if a sealed input was missing
                "note": "DEPENDENCY_VERSION always recoverable (DV.md §3); RESOURCE_BUDGET "
-                       "recoverable-class is the mechanical REPLAN-recoverable fraction at "
-                       "the drawn N/Q0 (RESOURCE_BUDGET.md §3) — labeled at launch; its "
-                       "expected-remaining-required closed form is NOT pinned and must be "
-                       "confirmed at fire, not invented here (SURFACED)."}
+                       "recoverable-class is labeled at launch by the RATIFIED formula "
+                       "(Q0 >= 19 - F_uniq(N), a1-S1-clean-s1-3 profile; RESOURCE_BUDGET.md "
+                       "§3/§5/§6) from the sealed N/Q0 without printing them — RB cells "
+                       "enter the ledger as RECOVERABLE / RETREAT_CONDITION."}
 
     # Gate verdict: PASS requires (a)+(b) pass AND recovery-quality AND the HARD probe gate
     # PASS AND the replay precondition PASS; any human-input pending -> PENDING.

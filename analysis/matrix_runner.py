@@ -77,19 +77,46 @@ RECOVERY_CLASS_3A = {
 
 LEDGER_DIR = REPO_ROOT / "runs" / "matrix_1b"
 
+# RESOURCE_BUDGET recoverable-class formula — RATIFIED by the author 2026-06-15 (rulings:
+# "unique required" F-semantics + the a1-S1-clean-s1-3 profile). RESOURCE_BUDGET.md §3:
+# REPLAN-recoverable iff Q0 >= expected_remaining_required(N), where
+#   expected_remaining_required(N) = RB_T_A1 - F_uniq(N)
+#   RB_T_A1 = 19 (§5 a1 row: 1 item list + 6 per-SKU item reads + 6 quotes + 6 us-east
+#     rates; family /inventory /pricing /shipping, /auth excluded)
+#   F_uniq(N) = count of DISTINCT REQUIRED family calls completed in the first N tool calls
+#     of a1's S1 batch clean-median call ledger. "remaining REQUIRED" (§3) + recovery
+#     "dedupe" (§2) => UNIQUE, not raw (the batch re-lists /inventory/items redundantly).
+# RB_F_UNIQUE_A1 below is the cumulative F_uniq(N) for N=1..24, FROZEN from the canonical
+# S1 clean-median run a1-S1-clean-s1-3 (24 tool calls = §6 a1 median 24; the seed-1 D20/D21
+# re-run, manipulation_table_s1_seed1; a SEEN clean run). Consumed RB pair is (a1,
+# quota_cliff) only; DEPENDENCY_VERSION (b1) is always recoverable (DV.md §3). The label is
+# computed at FIRE from the sealed N/Q0 and never prints them. Cite RESOURCE_BUDGET.md
+# §3/§5/§6; prereg_1b §3a; ratification decisions/v2_matrix_runner_gates_2026-06-15.md.
+RB_T_A1 = 19
+RB_F_UNIQUE_A1 = (0, 0, 0, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                  10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
+
 
 def task_path(task: str) -> str:
     return str(REPO_ROOT / "tasks" / f"{task}.yaml")
 
 
+def rb_recovery_class(n_inject: int, q0: int) -> str:
+    """The RATIFIED RESOURCE_BUDGET recoverable-class label from the sealed N/Q0:
+    RECOVERABLE (REPLAN-recoverable) iff Q0 >= RB_T_A1 - F_uniq(N), else RETREAT_CONDITION
+    (RESOURCE_BUDGET.md §3). Returns only the label — never the drawn values."""
+    if n_inject is None or q0 is None:
+        return "RB_MECHANICAL_AT_LAUNCH"               # defensive: missing sealed inputs
+    f = RB_F_UNIQUE_A1[min(max(int(n_inject), 1), len(RB_F_UNIQUE_A1)) - 1]
+    expected_remaining_required = RB_T_A1 - f
+    return "RECOVERABLE" if int(q0) >= expected_remaining_required else "RETREAT_CONDITION"
+
+
 def recovery_class(cell: SealedCell) -> Optional[str]:
-    """The 1bKG1 recoverable-class label for a cell (None for clean cells). Original
-    pairs: §3a (AUTHOR-8) verbatim. Held-out: DEPENDENCY_VERSION always RECOVERABLE
-    (DEPENDENCY_VERSION.md §3 binding asymmetry); RESOURCE_BUDGET is labeled MECHANICALLY
-    at launch from the drawn N/Q0 (RESOURCE_BUDGET.md §3) — returned as the sentinel
-    'RB_MECHANICAL_AT_LAUNCH' so the gate step surfaces it (the closed form for
-    'expected-remaining-required from the clean-median call profile at the drawn N' is NOT
-    given as a single formula in the spec; it must be confirmed at fire, never invented)."""
+    """The 1bKG1 recoverable-class label for a cell (None for clean cells). Original pairs:
+    §3a (AUTHOR-8) verbatim. Held-out: DEPENDENCY_VERSION always RECOVERABLE
+    (DEPENDENCY_VERSION.md §3 binding asymmetry); RESOURCE_BUDGET labeled at launch from the
+    sealed N/Q0 by the RATIFIED formula (rb_recovery_class), never printing the values."""
     if cell.injection is None:
         return None
     key = (cell.task, cell.injection)
@@ -97,8 +124,8 @@ def recovery_class(cell: SealedCell) -> Optional[str]:
         return RECOVERY_CLASS_3A[key]
     if cell.injection == "silent_minor_bump":          # DEPENDENCY_VERSION
         return "RECOVERABLE"
-    if cell.injection == "quota_cliff":                # RESOURCE_BUDGET
-        return "RB_MECHANICAL_AT_LAUNCH"               # surfaced, not invented (§3a / RB §3)
+    if cell.injection == "quota_cliff":                # RESOURCE_BUDGET (RATIFIED)
+        return rb_recovery_class(cell._n_inject, (cell._params or {}).get("q0"))
     return None
 
 
