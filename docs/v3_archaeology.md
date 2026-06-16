@@ -162,13 +162,27 @@ So the picture is **one dominant lever plus two minor ones**, not a single knob:
    exercised (API_SURFACE 35→19); arm only plan-named / likely-touched surfaces. $0 in the mock,
    but the real cost once the substrate runs a model.
 
-**Sweep-frequency tuning is the weakest lever** — waste is replan/discard-bound and TTD-flat, so
-faster sweeping buys no waste reduction and costs KG3. The waste lever, if pursued, is
-finer-grained interrupt (pause-affected-worker / salvage), not cadence.
+> **Mock-floor caveat (real-deployment qualification — added 2026-06-16).** Every "$0 substrate" /
+> "near-free probes" / "essentially free" / "weakest lever" statement in this synthesis holds
+> **only under the benchmark's free-re-observation assumption** — this is a deterministic mock
+> world where probe re-fetches and re-reads cost nothing measured. In a live deployment probes hit
+> real endpoints and files at real cost and latency, so (i) the 55.49% overhead is a **lower
+> bound**, (ii) probe volume and sweep frequency — free here — re-emerge as real overhead (the
+> family-arming over-provisioning, API_SURFACE armed 35 vs 19 exercised, is the canary), and
+> (iii) "sweep frequency is the weakest lever" is a mock-world statement, not a deployment one.
+> The compile-is-the-only-cost conclusion is a **benchmark-floor** result: a cached/cheaper compile
+> does not make the architecture free in deployment. The FSE draft carries this caveat in §10.
+
+**Sweep-frequency tuning is the weakest lever** *(in this mock world — see the mock-floor caveat
+above)* — waste is replan/discard-bound and TTD-flat, so faster sweeping buys no waste reduction
+and costs KG3. The waste lever, if pursued, is finer-grained interrupt (pause-affected-worker /
+salvage), not cadence.
 
 **Central tradeoff:** detection *coverage* vs the *LLM bookends* (compile to arm, replan to act).
-The monitoring substrate itself is essentially free; v3 should keep the cheap substrate and make
-the LLM bookends cheap and conditional, rather than trading coverage for cadence.
+The monitoring substrate is essentially free **only under the mock's free-re-observation
+assumption** (mock-floor caveat above); v3 should keep the substrate cheap *and design for its
+real deployment cost*, and make the LLM bookends cheap and conditional, rather than trading
+coverage for cadence.
 
 ---
 
