@@ -1,0 +1,76 @@
+{
+ "meta": {
+  "read_only": true,
+  "frozen_source": "cost_autopsy_v3.json partB (V2 7008 / S3 6404 over 31 non-clean cells/arm)",
+  "split_method": "time-proportional within lumped worker_end tokens; pre-fault sunk also given as worker-level upper bound",
+  "note_dandef": "buckets (d) replan and (e) monitoring are OUTSIDE the frozen wasted metric by construction; reported separately"
+ },
+ "summary": {
+  "V2": {
+   "n_nonclean": 31,
+   "n_detected": 14,
+   "n_with_discard": 8,
+   "frozen_waste_median": 7008,
+   "frozen_waste_mean": 7765.451612903225,
+   "bucket_medians": {
+    "a_pre_fault_sunk": 2264.3410640940215,
+    "a_pre_fault_sunk_workerlevel_ub": 4299,
+    "b_post_fault_pre_detection": 2799.619950795178,
+    "c_post_detection_burn": 0.0,
+    "d_replan_tokens_separate": 2291,
+    "e_monitoring_after_fault": 0
+   },
+   "bucket_means": {
+    "a_pre_fault_sunk": 2278.1538675308225,
+    "b_post_fault_pre_detection": 4432.74935827563,
+    "c_post_detection_burn": 1054.5483870967741
+   },
+   "discarded_mean": 1054.5483870967741,
+   "n_window_mean": 2.806451612903226,
+   "n_discard_mean": 0.967741935483871,
+   "d_replan_mean": 7280.129032258064,
+   "max_reconstruction_error_tokens": 0.0,
+   "alt_waste_excl_prefault_sunk_median": 3974.449094492943,
+   "alt_waste_excl_prefault_sunk_ub_median": 621,
+   "alt_waste_excl_redispatch_rework_median": 6117.0
+  },
+  "S3": {
+   "n_nonclean": 31,
+   "n_detected": 0,
+   "n_with_discard": 0,
+   "frozen_waste_median": 6404,
+   "frozen_waste_mean": 6958.193548387097,
+   "bucket_medians": {
+    "a_pre_fault_sunk": 2984.4958717605286,
+    "a_pre_fault_sunk_workerlevel_ub": 6404,
+    "b_post_fault_pre_detection": 2976.122668463104,
+    "c_post_detection_burn": 0.0,
+    "d_replan_tokens_separate": 0,
+    "e_monitoring_after_fault": 0
+   },
+   "bucket_means": {
+    "a_pre_fault_sunk": 2806.126539229659,
+    "b_post_fault_pre_detection": 4152.0670091574375,
+    "c_post_detection_burn": 0.0
+   },
+   "discarded_mean": 0.0,
+   "n_window_mean": 2.3225806451612905,
+   "n_discard_mean": 0.0,
+   "d_replan_mean": 0.0,
+   "max_reconstruction_error_tokens": 0.0,
+   "alt_waste_excl_prefault_sunk_median": 2976.122668463104,
+   "alt_waste_excl_prefault_sunk_ub_median": 0,
+   "alt_waste_excl_redispatch_rework_median": 6404.0
+  }
+ },
+ "dominant_bucket_v2": "b_post_fault_pre_detection",
+ "mean_diff_decomposition_v2_minus_s3": {
+  "total": 807.2580645161288,
+  "by_bucket": {
+   "a_pre_fault_sunk": -527.9726716988366,
+   "b_post_fault_pre_detection": 280.6823491181922,
+   "c_post_detection_burn": 1054.5483870967741
+  },
+  "largest": "c_post_detection_burn"
+ }
+}

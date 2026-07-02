@@ -41,7 +41,7 @@ from conductor.systems import SYSTEMS, SystemConfig
 from sentinel.compile import compile_tripwires, strip_markdown_fence
 from sentinel.judge import judge_escalation
 from trace import TraceWriter
-from world.state import InjectionSpec, RunConfig
+from world.state import InjectionSpec, NoiseProfile, RunConfig
 from world.surface import enriched_context
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -330,7 +330,8 @@ class Conductor:
                  heartbeat_k: Optional[int] = None,
                  heartbeat_calibration: Optional[dict] = None,
                  injection_params: Optional[dict] = None,
-                 probe_channel: bool = False) -> None:
+                 probe_channel: bool = False,
+                 noise_profile: Optional[NoiseProfile] = None) -> None:
         self.task = yaml.safe_load(Path(task_path).read_text(encoding="utf-8"))
         # production-fidelity context (D6): lean yaml context + the mechanical
         # surface appendix; used for both orchestrator and sentinel compiles
@@ -343,6 +344,9 @@ class Conductor:
         # The probe side channel is enabled only for v2 runs; baselines keep it off so
         # the world config is byte-identical to Phase 1.
         self.probe_channel = probe_channel
+        # A7 benign-noise profile (D36); None for every non-A7 run -> RunConfig omits it
+        # and the world config stays byte-identical to Phase 1.
+        self.noise_profile = noise_profile
         self.injection_name = injection
         self.n_inject = n_inject
         # Per-cell escrow overrides (prereg_1b: the loader applies sealed
@@ -424,9 +428,16 @@ class Conductor:
                            # frozen Phase 1 world) is the default so banked
                            # configs and legacy tasks replay byte-identically
                            world_rev=int(self.task.get("world_rev", 1)),
+                           # benchmark_1c forced width N (additive knob, like world_rev /
+                           # D35): None for every existing task (no regions world built),
+                           # so banked configs and legacy tasks stay byte-identical.
+                           n_regions=self.task.get("n_regions"),
                            # off for baselines (byte-identical world config); the v2
                            # run loop enables the perturbation-isolated probe channel
-                           probe_channel=self.probe_channel)
+                           probe_channel=self.probe_channel,
+                           # A7 benign-noise (D36); None for every non-A7 run -> the
+                           # world config lacks the field and stays byte-identical
+                           noise_profile=self.noise_profile)
         cfg_path = self.run_dir / "world_config.json"
         cfg_path.write_text(config.model_dump_json(), encoding="utf-8")
         log = open(self.run_dir / "world_server.log", "w", encoding="utf-8")
@@ -950,7 +961,12 @@ class Conductor:
             if self.system.tripwires_enabled:
                 self.compile_and_arm()
 
-            executor = ThreadPoolExecutor(max_workers=4)
+            # D35 executor-width knob: default 4 keeps every existing task byte-identical
+            # to 1b; the benchmark task sets executor_width=N to force forced-width fan-out.
+            # This changes ONLY the concurrency parameter — not what the sentinel observes,
+            # nor how probes/arms/matcher behave (compile/probe/arming/corroboration/cadence
+            # are downstream of and independent of max_workers).
+            executor = ThreadPoolExecutor(max_workers=int(self.task.get("executor_width", 4)))
             pending: dict[Future, str] = {}
             self.dispatch(executor, plan.steps, pending)
             self.drain(executor, pending)

@@ -129,6 +129,26 @@ def _silent_minor_bump(state: WorldState, params: dict[str, Any]) -> dict[str, A
             "version_to": version_to, "page_size_to": page_size_to}
 
 
+def _single_shard_value_mutation(state: WorldState, params: dict[str, Any]) -> dict[str, Any]:
+    """benchmark_1c §4 — single-shard TOWARD-THE-MEAN value mutation: mutate exactly
+    ONE region's demand inward (toward the distribution mean), magnitude per the ratified
+    rule, non-outlying, holding HTTP status / schema / field-names / response-length /
+    provenance INVARIANT (only the numeric value changes, same 4-digit width). Computed
+    deterministically from the same seeded world the fixtures use (single source of truth
+    = analysis.benchmark_1c_world). None of the 7 existing types do a single-shard value
+    mutation — this is a new world-side injection, added not repurposed."""
+    n = state.config.n_regions
+    if not n:
+        return {"type": "single_shard_value_mutation", "error": "no n_regions on this config"}
+    from analysis.benchmark_1c_world import build_world as _bench_world
+    w = _bench_world(n, state.config.seed, inject=True)   # deterministic: same seed -> same j, d'_j
+    state.regions_mutation = {"region_id": w.j_rid, "d_prime": int(w.d_prime),
+                              "d_orig": int(w.d_j)}
+    return {"type": "single_shard_value_mutation", "region_id": w.j_rid,
+            "d_orig": int(w.d_j), "d_prime": int(w.d_prime),
+            "delta": abs(int(w.d_prime) - int(w.d_j)), "dir": w.mutation_dir}
+
+
 _HANDLERS = {
     "endpoint_404": _endpoint_404,
     "schema_drift": _schema_drift,
@@ -137,6 +157,7 @@ _HANDLERS = {
     "gate_skip_trap": _gate_skip_trap,
     "quota_cliff": _quota_cliff,
     "silent_minor_bump": _silent_minor_bump,
+    "single_shard_value_mutation": _single_shard_value_mutation,
 }
 
 INJECTION_TYPES = tuple(_HANDLERS)

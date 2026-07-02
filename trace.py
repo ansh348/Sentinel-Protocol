@@ -32,6 +32,9 @@ EVENT_TYPES = frozenset({
     "tool_call",
     "tool_response",
     "injection_fired",
+    # A7 benign-noise (D36): records the transient_500 landing call (token vs first
+    # surface call). Gated behind noise_profile; never emitted on a non-A7 run.
+    "noise_fired",
     "tripwire_fire",
     "escalation",
     "judge_verdict",

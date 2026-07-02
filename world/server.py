@@ -36,9 +36,10 @@ from sentinel.dsl import Tripwire, TripwireSet
 from trace import TraceWriter
 from world.injections import (DEPRECATION_BODY, QUOTA_EXHAUSTED_BODY,
                               apply_injection)
+from world import noise  # A7 benign-noise (D36); gated on config.noise_profile
 from world.pagination import TOTAL_COUNT_KEY
 from world.state import InjectionSpec, RunConfig, WorldState
-from world.services import auth, docs, inventory, meta, pricing, repo, shipping
+from world.services import auth, docs, inventory, meta, pricing, regions, repo, shipping
 
 _MISSING = object()
 
@@ -427,6 +428,23 @@ class WorldMiddleware:
                                 body=dict(QUOTA_EXHAUSTED_BODY))
             return
 
+        # A7 transient_500 benign noise (D36; gated on config.noise_profile). The
+        # seed-derived trigger call 500s once at the boundary, then heals — a retry
+        # dispatches normally. Benign: no state mutated; S1 recovers (qualification).
+        # Off (no-op, no state change) for every non-A7 run → Phase-1 byte-identical.
+        if noise.trip_transient_500(state, n):
+            # Record WHICH call the transient landed on (token vs first surface call)
+            # so FIR scoring can separate "monitor saw the anomaly and stayed calm"
+            # from "anomaly never reached an observed surface" (author spec, A7).
+            ctx.trace.emit(
+                actor="world", event_type="noise_fired",
+                payload={"noise_class": "transient_500", "counter": n, "path": path,
+                         "landed_on": "token" if path == "/auth/token" else "surface"})
+            await self._respond(scope, receive, send, n, method, path, query,
+                                worker_id, request_body=None, status=500,
+                                body=dict(noise.TRANSIENT_500_BODY))
+            return
+
         req_chunks: list[bytes] = []
 
         async def receive_teed() -> dict:
@@ -575,6 +593,15 @@ class WorldMiddleware:
             if isinstance(body, dict):
                 body = {**body, "quota_remaining": state.quota_remaining}
 
+        # A7 benign-noise response decoration (D36; gated on config.noise_profile). Adds
+        # the constant elapsed_ms envelope on every A7 response (+ the latency spike at the
+        # seed-derived call) and, for the additive_field class, one extra unused field.
+        # Worker traffic only (the probe channel is _respond_probe, untouched). Off (no-op)
+        # for every non-A7 run → byte-identical to Phase 1. Placed before the matcher and
+        # the trace so the monitor and the worker both see exactly the same body.
+        if noise.active(state):
+            body = noise.decorate_body(state, n, body)
+
         ctx.trace.emit(
             actor=worker_id,
             event_type="tool_call",
@@ -666,6 +693,12 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
         # rev-2-only surface: keeps rev-1 OpenAPI, D13 path samples, and
         # banked-trace replays byte-identical (benchmark/holdouts/*.md)
         app.include_router(meta.router)
+    if config.n_regions:
+        # benchmark_1c regions surface — registered ONLY when n_regions is set, so
+        # every existing task's OpenAPI, D13 path samples, surface appendix, and
+        # replays stay byte-identical (same discipline as the rev-2 meta router and
+        # the probe-channel gate-shadow). Existing configs default n_regions=None.
+        app.include_router(regions.router)
     if config.probe_channel:
         # v2 §4 gate-shadow surface (read-only enforcement re-read; build B5).
         # Registered ONLY on probe-channel worlds, so banked/Phase-1 OpenAPI,
@@ -737,7 +770,7 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
         shipping_nested: dict[str, dict[str, Any]] = {}
         for (sku, dest), entry in state.shipping.items():
             shipping_nested.setdefault(sku, {})[dest] = entry
-        return {
+        gt = {
             "prices": state.prices,
             "inventory": state.inventory,
             "shipping": shipping_nested,
@@ -745,6 +778,14 @@ def create_app(config: RunConfig, trace: Optional[TraceWriter] = None) -> FastAP
                          for pid, p in state.passages.items()},
             "repo_files": state.repo_files,
         }
+        # benchmark_1c (additive, conditional on n_regions): the checker rebuilds the
+        # canonical clean world from (n, seed) to validate the allocation packages.
+        # Admin-path only (never counted / never in the worker traffic the byte-identity
+        # replay checks); for existing tasks n_regions is None and nothing is added.
+        if config.n_regions:
+            gt["n"] = config.n_regions
+            gt["seed"] = config.seed
+        return gt
 
     @app.get("/admin/state")
     def admin_state() -> dict:

@@ -23,8 +23,8 @@ from typing import Iterable, Optional
 from world.server import classify_url_pattern, get_path_samples
 
 
-@functools.lru_cache(maxsize=8)
-def path_samples_for_rev(world_rev: int) -> tuple[str, ...]:
+@functools.lru_cache(maxsize=16)
+def path_samples_for_rev(world_rev: int, n_regions: Optional[int] = None) -> tuple[str, ...]:
     """D13 samples, rev-aware (D24). Rev 1 returns world.server's derived
     sample VERBATIM (byte-identical Phase 1 behavior — the banked-replay
     foundation). Rev >= 2 derives the same way from a rev-N world's own
@@ -42,10 +42,17 @@ def path_samples_for_rev(world_rev: int) -> tuple[str, ...]:
 
     fd, trace_path = tempfile.mkstemp(suffix=".jsonl")
     os.close(fd)
+    # n_regions (additive, default None = byte-identical): when set, the sample-app
+    # builds N region shards and the {region_id} family is instantiated from them, so the
+    # benchmark_1c /regions surfaces become VISIBLE to grounding. None -> the regions
+    # router is not registered and the {region_id} branch is dormant, so the derived
+    # sample set is byte-identical for every existing task (visibility-only).
     app = create_app(RunConfig(run_id="liveness-samples", seed=0,
                                system="surface", task_id="surface",
-                               trace_path=trace_path, world_rev=world_rev))
+                               trace_path=trace_path, world_rev=world_rev,
+                               n_regions=n_regions))
     spec_paths = app.openapi()["paths"]
+    region_ids = list(getattr(app.state.ctx.state, "region_order", []))
     app.state.ctx.trace.close()
     try:
         os.unlink(trace_path)
@@ -64,6 +71,8 @@ def path_samples_for_rev(world_rev: int) -> tuple[str, ...]:
                            for p in PASSAGES)
         if "{path}" in path:
             samples.update(path.replace("{path}", f) for f in REPO_FILES_V2)
+        if "{region_id}" in path:        # benchmark_1c width-scaled family (dormant unless n_regions)
+            samples.update(path.replace("{region_id}", rid) for rid in region_ids)
     return tuple(sorted(samples))
 
 

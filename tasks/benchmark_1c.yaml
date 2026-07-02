@@ -1,0 +1,110 @@
+# Task benchmark_1c — demand-normalized regional allocation (Phase-1c WIDTH-SCALED).
+# BUILD / NOT FROZEN / NOT CONFIRMATORY. D36 width-scaled form: N one-shard worker steps,
+# fixed work per worker (ONE shard each), total work grows with N. A single silently-
+# mutated shard changes the SHARED denominator T -> all N parallel allocations wasted.
+id: benchmark_1c
+archetype: demand_allocation
+world_rev: 4
+# n_regions = forced width N. executor_width (D35) forces N concurrent workers, one per shard.
+# N=8/16 use the same one-shard-per-step structure with the first N steps (sliced to n_regions).
+n_regions: 32
+fan_out: 32
+executor_width: 32
+goal: >
+  Collect verified regional demand from 32 regional evidence ledgers so a downstream
+  DETERMINISTIC reducer can compute demand-normalized allocation shares. Each of 32 workers
+  reads exactly ONE region's evidence and reports that region's normalized_verified_demand
+  and provenance_id. The FINAL AGGREGATE output must be a JSON object of the form
+  {"packages": [ {"region_id": "R-0001", "verified_demand": <that region's
+  normalized_verified_demand as an integer>, "provenance_id": "<that region's provenance_id>"},
+  ... ]} with EXACTLY ONE entry per region (all 32). Do NOT compute the shared total or the
+  shares — a deterministic validator computes T = sum of verified_demand over all regions and
+  each share = verified_demand / T exactly. Your only job is to faithfully COLLECT every
+  region's verified_demand and provenance_id into that packages list. A single wrong or
+  missing region demand invalidates every allocation, so completeness and fidelity matter.
+plan:
+  - subplan_id: s1
+    step: "Worker w1: GET /regions/R-0001/evidence ; record its single region R-0001 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s2
+    step: "Worker w2: GET /regions/R-0002/evidence ; record its single region R-0002 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s3
+    step: "Worker w3: GET /regions/R-0003/evidence ; record its single region R-0003 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s4
+    step: "Worker w4: GET /regions/R-0004/evidence ; record its single region R-0004 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s5
+    step: "Worker w5: GET /regions/R-0005/evidence ; record its single region R-0005 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s6
+    step: "Worker w6: GET /regions/R-0006/evidence ; record its single region R-0006 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s7
+    step: "Worker w7: GET /regions/R-0007/evidence ; record its single region R-0007 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s8
+    step: "Worker w8: GET /regions/R-0008/evidence ; record its single region R-0008 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s9
+    step: "Worker w9: GET /regions/R-0009/evidence ; record its single region R-0009 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s10
+    step: "Worker w10: GET /regions/R-0010/evidence ; record its single region R-0010 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s11
+    step: "Worker w11: GET /regions/R-0011/evidence ; record its single region R-0011 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s12
+    step: "Worker w12: GET /regions/R-0012/evidence ; record its single region R-0012 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s13
+    step: "Worker w13: GET /regions/R-0013/evidence ; record its single region R-0013 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s14
+    step: "Worker w14: GET /regions/R-0014/evidence ; record its single region R-0014 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s15
+    step: "Worker w15: GET /regions/R-0015/evidence ; record its single region R-0015 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s16
+    step: "Worker w16: GET /regions/R-0016/evidence ; record its single region R-0016 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s17
+    step: "Worker w17: GET /regions/R-0017/evidence ; record its single region R-0017 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s18
+    step: "Worker w18: GET /regions/R-0018/evidence ; record its single region R-0018 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s19
+    step: "Worker w19: GET /regions/R-0019/evidence ; record its single region R-0019 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s20
+    step: "Worker w20: GET /regions/R-0020/evidence ; record its single region R-0020 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s21
+    step: "Worker w21: GET /regions/R-0021/evidence ; record its single region R-0021 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s22
+    step: "Worker w22: GET /regions/R-0022/evidence ; record its single region R-0022 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s23
+    step: "Worker w23: GET /regions/R-0023/evidence ; record its single region R-0023 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s24
+    step: "Worker w24: GET /regions/R-0024/evidence ; record its single region R-0024 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s25
+    step: "Worker w25: GET /regions/R-0025/evidence ; record its single region R-0025 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s26
+    step: "Worker w26: GET /regions/R-0026/evidence ; record its single region R-0026 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s27
+    step: "Worker w27: GET /regions/R-0027/evidence ; record its single region R-0027 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s28
+    step: "Worker w28: GET /regions/R-0028/evidence ; record its single region R-0028 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s29
+    step: "Worker w29: GET /regions/R-0029/evidence ; record its single region R-0029 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s30
+    step: "Worker w30: GET /regions/R-0030/evidence ; record its single region R-0030 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s31
+    step: "Worker w31: GET /regions/R-0031/evidence ; record its single region R-0031 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s32
+    step: "Worker w32: GET /regions/R-0032/evidence ; record its single region R-0032 normalized_verified_demand and provenance_id (this worker handles exactly one shard)."
+  - subplan_id: s33
+    step: "Aggregate (orchestrator, in the aggregate turn): collect ALL 32 workers' records into final_report = {\"packages\": [{\"region_id\": ..., \"verified_demand\": <the worker's normalized_verified_demand as an integer>, \"provenance_id\": ...}, ...]}, EXACTLY one entry per region. Do NOT compute the shared total T or the shares; a deterministic validator computes T and every share=verified_demand/T exactly."
+assumptions:
+  - id: a1
+    text: "Each GET /regions/{region_id}/evidence returns 200 with a stable normalized_verified_demand value and an invariant provenance_id for the duration of the run."
+  - id: a2
+    text: "The shared_total T is the sum of normalized_verified_demand across all 32 regions; a change to any single region's demand invalidates every worker's allocation."
+  - id: a3
+    text: "GET /regions returns the complete list of 32 region ids; each region's evidence is an immutable record identified by its provenance_id."
+injections:
+  - type: single_shard_value_mutation
+    params: {}
+    n_inject: null
+checker: checkers/benchmark_1c.py
+task_context: >
+  Mock regional-demand world served by a local FastAPI server. Service: regions —
+  GET /regions (manifest of 32 region ids + evidence urls, nothing else) and
+  GET /regions/{region_id}/evidence ({region_id, normalized_verified_demand (integer units),
+  provenance_id (opaque), reporting_period, status}). The allocation denominator is the sum
+  of normalized_verified_demand across all 32 regions (a shared denominator). All worker tool
+  calls are bash curl requests against the run's world port.

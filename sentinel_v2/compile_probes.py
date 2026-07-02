@@ -279,12 +279,14 @@ def _to_attachment_assumption(soft: SoftAssumption, aid: str,
 
 def compile_pipeline(soft_set: SoftAssumptionSet, *, world_rev: int = 1,
                      world=None, auth_token: Optional[str] = None,
-                     planned_write_set=()) -> CompileResult:
+                     planned_write_set=(), n_regions=None) -> CompileResult:
     """Ground → provenance-gate → attachment+lens+typing. Deterministic given the
-    soft set; the LLM call already happened (compile_assumptions)."""
-    samples = path_samples_for_rev(world_rev)
+    soft set; the LLM call already happened (compile_assumptions). n_regions (additive,
+    default None = byte-identical) makes the benchmark_1c /regions surfaces VISIBLE to
+    the sample-derivation; the grounding/classification logic is unchanged."""
+    samples = path_samples_for_rev(world_rev, n_regions=n_regions)
     from sentinel_v2.surface_appendix import openapi_paths_for_rev
-    routes = tuple(openapi_paths_for_rev(world_rev).keys())
+    routes = tuple(openapi_paths_for_rev(world_rev, n_regions=n_regions).keys())
     # D32: the plan-named concrete family ids = the real, groundable concrete paths the
     # soft set names DIRECTLY (a {param} family template grounds to these where present).
     # Drawn from the plan/soft-set only — injection-blind, never escrow.

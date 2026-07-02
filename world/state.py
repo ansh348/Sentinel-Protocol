@@ -22,11 +22,22 @@ from pydantic import BaseModel, Field
 InjectionType = Literal[
     "endpoint_404", "schema_drift", "token_expiry", "doc_contradiction",
     "gate_skip_trap", "quota_cliff", "silent_minor_bump",
+    "single_shard_value_mutation",   # benchmark_1c §4 (additive; new world-side injection)
 ]
 
 
 class InjectionSpec(BaseModel):
     type: InjectionType
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+# A7 benign-noise smoke (analysis/v5_hardening/A7_..._ADDENDUM_2026-07-02.md; D36).
+# Three frozen classes; harness-only, seed-derived, benign by construction.
+NoiseClass = Literal["transient_500", "latency_spike", "additive_field"]
+
+
+class NoiseProfile(BaseModel):
+    noise_class: NoiseClass
     params: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -45,12 +56,22 @@ class RunConfig(BaseModel):
     # endpoints, and the expanded fixture repo (REPO_FILES_V2). Banked Phase 1
     # configs lack the field and default to 1.
     world_rev: int = 1
+    # benchmark_1c sharded-allocation width (ADDITIVE; default None = off, so every
+    # banked/existing config and task is byte-identical). When set, WorldState builds
+    # N region demand shards (analysis.benchmark_1c_world) for the regions service.
+    n_regions: Optional[int] = None
     # v2 probe side channel (v6.1 §11.9 amendment #1; archaeology_v2 G7).
     # False (the default for every banked and pre-1b config) renders the
     # probe marker header inert: requests carrying it count and behave
     # exactly like ordinary worker traffic, so Phase 1 behavior is
     # byte-identical. Enabled explicitly by the 1b launch manifest only.
     probe_channel: bool = False
+    # A7 benign-noise smoke (D36). ADDITIVE knob, default None = OFF: every banked,
+    # pre-1b, and confirmatory config lacks the field and defaults to None, so no noise
+    # code runs and flag-off responses are byte-identical to Phase 1. Set ONLY by the A7
+    # runner. Harness-only, seed-derived, benign (transients heal, additive field unused,
+    # latency is a value-only elapsed_ms envelope — no wall-clock).
+    noise_profile: Optional[NoiseProfile] = None
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +356,21 @@ class WorldState:
         # invisible to workers and to every Phase 1 code path.
         self.probe_seq: int = 0
 
+        # benchmark_1c sharded-allocation regions (ADDITIVE; populated only when
+        # config.n_regions is set — default None leaves every existing task untouched).
+        # Single source of truth = analysis.benchmark_1c_world (the validated demand
+        # distribution + toward-the-mean mutation used by the S1 qualification).
+        self.region_order: list[str] = []
+        self.regions: dict[str, int] = {}             # region_id -> clean demand (4-digit)
+        self.region_provs: dict[str, str] = {}        # region_id -> opaque provenance_id
+        self.regions_mutation: Optional[dict] = None  # set by single_shard_value_mutation
+        if config.n_regions:
+            from analysis.benchmark_1c_world import build_world as _bench_world
+            _w = _bench_world(config.n_regions, config.seed, inject=False)
+            self.region_order = list(_w.region_ids)
+            self.regions = {rid: int(_w.demands_clean[i]) for i, rid in enumerate(_w.region_ids)}
+            self.region_provs = {rid: _w.provs[i] for i, rid in enumerate(_w.region_ids)}
+
         # mutation flags written by world.injections
         self.removed_routes: list[str] = []
         self.pricing_drift: bool = False
@@ -358,6 +394,30 @@ class WorldState:
         # STOP_AND_ESCALATE, every later call from it gets a 409 carrying the
         # same control object. Cleared when a new tripwire set is armed.
         self.tripped_workers: dict[str, dict[str, Any]] = {}
+
+        # A7 benign-noise state (D36; gated on config.noise_profile). All None/False for
+        # every non-A7 run, so nothing here perturbs a Phase-1/confirmatory run. Dedicated
+        # seed-derived RNG stream (distinct offset from _auth_rng's +7919) so noise values
+        # depend only on the seed. elapsed_ms is a constant envelope on EVERY A7 response;
+        # it spikes only in a latency_spike run, at the seed-derived call.
+        self.noise_rng: Optional[random.Random] = None
+        self.noise_500_trigger: Optional[int] = None
+        self.noise_500_fired: bool = False
+        self.noise_latency_trigger: Optional[int] = None
+        self.noise_elapsed_base_ms: Optional[int] = None
+        self.noise_elapsed_spike_ms: Optional[int] = None
+        self.noise_additive_value: Optional[str] = None
+        if config.noise_profile is not None:
+            self.noise_rng = random.Random(config.seed + 104729)
+            self.noise_elapsed_base_ms = 20 + self.noise_rng.randrange(40)
+            self.noise_elapsed_spike_ms = 1500 + self.noise_rng.randrange(500)
+            nc = config.noise_profile.noise_class
+            if nc == "transient_500":
+                self.noise_500_trigger = 1 + self.noise_rng.randrange(2)
+            elif nc == "latency_spike":
+                self.noise_latency_trigger = 1 + self.noise_rng.randrange(3)
+            elif nc == "additive_field":
+                self.noise_additive_value = f"a7-{self.noise_rng.getrandbits(32):08x}"
 
     # -- auth ---------------------------------------------------------------
 

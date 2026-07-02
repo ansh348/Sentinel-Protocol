@@ -78,10 +78,14 @@ V2J_SYSTEM = SystemConfig(
 
 
 class V2Conductor(Conductor):
-    def __init__(self, *, judge: bool = False, **kwargs) -> None:
+    def __init__(self, *, judge: bool = False,
+                 deterministic_select: bool = False, **kwargs) -> None:
         super().__init__(system_config=(V2J_SYSTEM if judge else V2_SYSTEM),
                          probe_channel=True, **kwargs)
         self._judge = judge
+        # V2nc ablation: when set, the soft-assumption set is enumerated deterministically
+        # instead of compiled by the LLM. Default False -> the V2 path is byte-identical.
+        self._deterministic_select = deterministic_select
         self.v2_probes: list = []
         self.v2_baselines: dict = {}          # surface -> earliest clean §8 read (the baseline)
         self.v2_invalidations: list = []      # DISTINCT corroborated invalidations (deduped)
@@ -110,8 +114,18 @@ class V2Conductor(Conductor):
 
     # -- v2 compile replaces the v1 tripwire compile/arm ----------------------
     def compile_and_arm(self) -> None:
-        soft, sessions = compile_assumptions(self.plan_text(), self.task_context,
-                                             self.trace, isolated_home=self.session_home)
+        # The ONLY difference between V2 and the V2nc ablation: the SOURCE of the soft
+        # set. V2 compiles it with the LLM (compile_assumptions); V2nc enumerates it
+        # deterministically (deterministic_select, $0, no model). Everything below is
+        # byte-identical — the same compile_pipeline grounds + types + arms it, the same
+        # arm-time capture / barriers / corroboration / replan run on the result.
+        if self._deterministic_select:
+            from sentinel_v2.deterministic_select import select_region_value_assumptions
+            soft = select_region_value_assumptions(self.task, self.plan, self.trace)
+            sessions = []
+        else:
+            soft, sessions = compile_assumptions(self.plan_text(), self.task_context,
+                                                 self.trace, isolated_home=self.session_home)
         self.all_calls.extend(sessions)
         if soft is None:
             raise RunAbort("compile_failed", "v2 compile produced no soft set")
@@ -129,7 +143,8 @@ class V2Conductor(Conductor):
             cr = compile_pipeline(
                 soft, world_rev=int(self.task.get("world_rev", 1)),
                 world=_SideChannelWorld(sc_client), auth_token=token,
-                planned_write_set=self.v2_write_set)
+                planned_write_set=self.v2_write_set,
+                n_regions=self.task.get("n_regions"))
         finally:
             sc_client.close()
         self.v2_gate_probes = [p for p in cr.probes
@@ -156,6 +171,17 @@ class V2Conductor(Conductor):
                                  "revision": self.plan.revision,
                                  "count": len(self.v2_probes),
                                  "targets": [p.target for p in self.v2_probes],
+                                 # observability (additive, behavior-neutral): the armed
+                                 # per-probe SHAPE, so the trace alone shows which surfaces
+                                 # carry a VALUE baseline-diff lens (value_changed/field_read/
+                                 # proof_baseline) vs a structure/status lens.
+                                 "probes": [{"target": p.target,
+                                             "fault_shape": p.fault_shape.value,
+                                             "lens": p.lens.op.value,
+                                             "comparison": p.comparison.value,
+                                             "pointer": p.lens.pointer,
+                                             "field": p.lens.field}
+                                            for p in self.v2_probes],
                                  "write_set": list(self.v2_write_set),
                                  "gate_probes": [p.target for p in self.v2_gate_probes],
                                  "uncovered": cr.uncovered})
@@ -346,6 +372,12 @@ class V2Conductor(Conductor):
                             payload={"tripwire_id": f"v2_probe::{inv.target}",
                                      "evidence": {"_path": inv.target,
                                                   "grade": inv.grade.value},
+                                     # observability (additive, behavior-neutral): the
+                                     # FIRING reason, so the trace alone proves WHICH lens
+                                     # fired (a value-drift vs a status fast path) without
+                                     # re-deriving it. Does not affect detection.
+                                     "fault_shape": inv.fault_shape,
+                                     "evidence_class": inv.evidence_class,
                                      "subplan_id": subplan_id, "counter": counter,
                                      "where": where})
             if emit_interrupt and inv.grade is Grade.INTERRUPT:
@@ -513,12 +545,14 @@ class V2Conductor(Conductor):
 
 
 def run_v2_loop(*, task_path, injection=None, n_inject=None, seed=1,
-                runs_root="runs", judge=False, max_replans=2) -> dict:
+                runs_root="runs", judge=False, max_replans=2,
+                noise_profile=None) -> dict:
     """Run one cell through the real v2 loop and return the run summary (+ the
-    conductor for v2-state inspection)."""
+    conductor for v2-state inspection). noise_profile is the A7 benign-noise knob
+    (D36); None keeps the world config byte-identical to Phase 1."""
     cond = V2Conductor(task_path=task_path, injection=injection, n_inject=n_inject,
                        seed=seed, runs_root=runs_root, judge=judge,
-                       max_replans=max_replans)
+                       max_replans=max_replans, noise_profile=noise_profile)
     summary = cond.run()
     summary["v2_invalidations"] = len(cond.v2_invalidations)
     summary["v2_interrupts"] = cond.v2_interrupts

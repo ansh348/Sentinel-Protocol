@@ -1,0 +1,17 @@
+# Railway service config -- PREPARED / UNTESTED (FEASIBILITY, NOT FROZEN)
+# One-shot run: restart NEVER so a finished exit does not loop and re-bill.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "deploy/railway/Dockerfile"
+
+[deploy]
+startCommand = "bash deploy/railway/entrypoint.sh"
+restartPolicyType = "NEVER"
+numReplicas = 1
+
+# NOT settable in this file -- DO THESE IN THE DASHBOARD (reported to the user):
+#  - Volume: attach a volume mounted at /data
+#  - Variables: ANTHROPIC_API_KEY (service variable, NOT in image/repo);
+#               RAILWAY_RUN_UID=0  (volumes mount as root; non-root loses writes);
+#               MODE=persist | equiv | probe
+#  - Resources: RAM limit = 32 GB (covers N up to 64)

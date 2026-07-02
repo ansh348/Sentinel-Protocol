@@ -38,10 +38,12 @@ from sentinel_v2.typing_engine import BaselineObligations, Invariant, Verdict
 # registered matrix arms (P3 designations unchanged).
 TWO_TIER = "V2"
 REBUILT_JUDGE = "V2J"
+NO_COMPILER = "V2nc"          # Phase-1c ablation: v2 stack with the LLM compiler removed
 S1, S2, S3 = "S1", "S2", "S3"
 
 PRIMARY_ARM = TWO_TIER
 EXPLORATORY_ARMS = (REBUILT_JUDGE,)
+ABLATION_ARMS = (NO_COMPILER,)        # Phase-1c: the no-LLM-compiler ablation of V2
 BASELINE_ARMS = (S1, S2, S3)
 
 # Request-malformation status codes (§8 / harvest): a 4xx here is about the HTTP
@@ -61,6 +63,7 @@ class ArmSpec:
     judge: bool = False             # the (rebuilt, exploratory) judge tier — V2J only
     honesty_clause: bool = False    # S2: mandatory head-to-head, reported in results not a footnote
     heartbeat: bool = False         # S3: cost-matched periodic revalidation
+    deterministic_select: bool = False  # V2nc: deterministic enumeration instead of the LLM compiler
 
     @property
     def is_v2(self) -> bool:
@@ -76,6 +79,13 @@ ARMS: dict[str, ArmSpec] = {
         REBUILT_JUDGE, "v2", "exploratory",
         "v2 with the rebuilt judge tier; exploratory only, never co-primary with V2.",
         judge=True),
+    NO_COMPILER: ArmSpec(
+        NO_COMPILER, "v2", "ablation",
+        "v2 stack with the LLM compiler REMOVED (Phase-1c ablation): the soft-assumption "
+        "set is enumerated deterministically (deterministic_select) instead of compiled by "
+        "the model; everything downstream (grounding, arm-time baseline, barriers, "
+        "corroboration, replan) is byte-identical to V2.",
+        deterministic_select=True),
     S1: ArmSpec(S1, "baseline", "baseline", "Batch baseline (dispatch, wait, aggregate)."),
     S2: ArmSpec(S2, "baseline", "baseline",
                 "Naive anomaly-gated escalation; mandatory head-to-head (honesty clause).",
@@ -269,6 +279,7 @@ def dispatch(arm_id: str, *, task_path, injection=None, n_inject=None, seed: int
         from conductor.run_v2_loop import V2Conductor
         cond = V2Conductor(task_path=task_path, injection=injection, n_inject=n_inject,
                            seed=seed, runs_root=runs_root, judge=spec.judge,
+                           deterministic_select=spec.deterministic_select,
                            max_replans=max_replans, injection_params=injection_params)
         summary = cond.run()
         res = collect_arm_result(cond.run_dir, arm_id)        # M6 instrument (parity)

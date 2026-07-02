@@ -1,0 +1,12 @@
+# lean build context for the Railway B2 probe image
+.git
+.venv
+venv
+**/__pycache__
+*.pyc
+.pytest_cache
+escrow
+runs
+!deploy/railway/refs
+tests
+queue.sqlite

@@ -1,0 +1,15 @@
+# Railway service config — at the SERVICE ROOT so Railway actually reads it (a copy at
+# deploy/railway/railway.toml is NOT read; Railway resolves railway.toml/json only from
+# the root of the uploaded build context). Pilot-relevant: keep this file here.
+# One-shot run: restart NEVER so a finished exit does not loop and re-bill.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "deploy/railway/Dockerfile"
+
+[deploy]
+startCommand = "bash deploy/railway/entrypoint.sh"
+restartPolicyType = "NEVER"
+numReplicas = 1
+
+# Dashboard-only (cannot be set here): Volume mounted at /data; service Variables
+# (ANTHROPIC_API_KEY, RAILWAY_RUN_UID=0, MODE=qual); RAM limit 32 GB.

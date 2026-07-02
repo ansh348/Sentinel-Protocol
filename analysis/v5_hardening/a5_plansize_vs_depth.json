@@ -1,0 +1,60 @@
+{
+ "meta": {
+  "read_only": true,
+  "plan_size_proxy": "plan event output_tokens (primary); compile output_tokens (cross-check)",
+  "proxy_note": "check-writer input_tokens is a degenerate constant (CLI logs uncached input only); see checkwriter_input_tokens_observed",
+  "checkwriter_input_tokens_observed": [
+   3
+  ],
+  "run_size": "total worker tokens (execution depth); tool_calls also recorded"
+ },
+ "n_v2_runs": 43,
+ "per_task_medians": {
+  "a1": {
+   "n": 17,
+   "plan_out_med": 2241,
+   "compile_out_med": 6708,
+   "worker_tokens_med": 7008,
+   "tool_calls_med": 0,
+   "plan_over_worker": 0.319777397260274
+  },
+  "b1": {
+   "n": 8,
+   "plan_out_med": 3717.0,
+   "compile_out_med": 6292.0,
+   "worker_tokens_med": 6930.0,
+   "tool_calls_med": 0.0,
+   "plan_over_worker": 0.5363636363636364
+  },
+  "c1": {
+   "n": 9,
+   "plan_out_med": 2545,
+   "compile_out_med": 9006,
+   "worker_tokens_med": 6617,
+   "tool_calls_med": 0,
+   "plan_over_worker": 0.38461538461538464
+  },
+  "d1": {
+   "n": 9,
+   "plan_out_med": 7496,
+   "compile_out_med": 7693,
+   "worker_tokens_med": 8697,
+   "tool_calls_med": 0,
+   "plan_over_worker": 0.8619064045073014
+  }
+ },
+ "across_runs": {
+  "pearson_plan_vs_worker_tokens": 0.29906981963016693,
+  "pearson_compile_vs_worker_tokens": 0.15668308774586398,
+  "plan_over_worker_ratio_median": 0.39654834281231616,
+  "ratio_small_runs": 0.4238702201622248,
+  "ratio_large_runs": 0.3119161007414451,
+  "ratio_drop_small_to_large": 0.2641235786225612
+ },
+ "depth_spread_across_tasks": 1.3143418467583496,
+ "depth_varied_enough_to_test": false,
+ "corr_strong": false,
+ "ratio_stable": false,
+ "plan_nontrivial_fraction_floor": 0.319777397260274,
+ "verdict": "cannot demonstrate proportionality; depth escape NOT closed --- scope to tested/fan-out regime"
+}

@@ -1,0 +1,67 @@
+{
+ "meta": {
+  "read_only": true,
+  "source": "results.jsonl + traces (matrix_1b)"
+ },
+ "v2_clean": {
+  "n": 12,
+  "success": 8,
+  "fail": 4,
+  "rate": 0.6666666666666666
+ },
+ "s1_clean": {
+  "n": 12,
+  "success": 9,
+  "fail": 3,
+  "rate": 0.75
+ },
+ "gap_runs": 1,
+ "v2_all_clean_cells_zero_interrupts_ledger": true,
+ "v2_failures_all_zero_interrupts": true,
+ "v2_failure_detail": [
+  {
+   "task": "c1",
+   "n_interrupts": 0,
+   "success_check": {
+    "success": false,
+    "detail": "brief.warehouses: does not reflect the three operational warehouses premise"
+   },
+   "dir": "c1-V2-clean-s87562"
+  },
+  {
+   "task": "c1",
+   "n_interrupts": 0,
+   "success_check": {
+    "success": false,
+    "detail": "package_id None is not a non-empty string"
+   },
+   "dir": "c1-V2-clean-s97721"
+  },
+  {
+   "task": "d1",
+   "n_interrupts": 0,
+   "success_check": {
+    "success": false,
+    "detail": "title None is not a non-empty string; citations is not a non-empty list of passage ids; citations: missing required passage id 'ops-warehouses'; citations: missing required passage id 'pol-pricing'; validate.status None != 'passed'; validate.checks_run None is not > 0; package_id None is not a non-empty string"
+   },
+   "dir": "d1-V2-clean-s35465"
+  },
+  {
+   "task": "d1",
+   "n_interrupts": 0,
+   "success_check": {
+    "success": false,
+    "detail": "title None is not a non-empty string; citations is not a non-empty list of passage ids; citations: missing required passage id 'ops-warehouses'; citations: missing required passage id 'pol-pricing'; validate.status 'not_run' != 'passed'; validate.checks_run 0 is not > 0; package_id None is not a non-empty string"
+   },
+   "dir": "d1-V2-clean-s66889"
+  }
+ ],
+ "v2_fail_tasks": {
+  "c1": 2,
+  "d1": 2
+ },
+ "s1_fail_tasks": {
+  "b1": 1,
+  "d1": 2
+ }
+}

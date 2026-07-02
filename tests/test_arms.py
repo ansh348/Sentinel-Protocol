@@ -32,12 +32,23 @@ def _status_probe(target):
 
 # -- the registry: five arms, roles, reporting flags ---------------------------
 
-def test_five_arms_registered_with_roles():
-    assert set(arms.ARMS) == {"V2", "V2J", "S1", "S2", "S3"}
+def test_arms_registered_with_roles():
+    # five matrix arms + the Phase-1c V2nc ablation
+    assert set(arms.ARMS) == {"V2", "V2J", "V2nc", "S1", "S2", "S3"}
     assert arms.PRIMARY_ARM == "V2" and arms.ARMS["V2"].role == "primary"
     assert arms.ARMS["V2J"].role == "exploratory" and arms.ARMS["V2J"].judge is True
     assert arms.EXPLORATORY_ARMS == ("V2J",)
     assert all(arms.ARMS[b].kind == "baseline" for b in ("S1", "S2", "S3"))
+
+
+def test_v2nc_ablation_arm_registered():
+    nc = arms.ARMS["V2nc"]
+    assert nc.kind == "v2" and nc.role == "ablation"
+    assert nc.deterministic_select is True            # the no-LLM-compiler ablation
+    assert nc.judge is False
+    assert arms.ABLATION_ARMS == ("V2nc",)
+    # V2 must be untouched by the ablation: it still uses the LLM compiler
+    assert arms.ARMS["V2"].deterministic_select is False
 
 
 def test_s2_carries_the_honesty_clause_and_s3_the_heartbeat():

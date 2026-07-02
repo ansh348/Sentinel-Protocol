@@ -1,0 +1,82 @@
+{
+ "meta": {
+  "read_only": true,
+  "z": 1.959963984540054,
+  "sources": "gate_report_final.json (counts); Wilson closed-form; Fisher exact hypergeometric"
+ },
+ "wilson_lower_bounds": {
+  "gated_recall_10_15": {
+   "k": 10,
+   "n": 15,
+   "lower": 0.41713547738519774
+  },
+  "detection_inventory_24_31": {
+   "k": 24,
+   "n": 31,
+   "lower": 0.6018758161665795
+  },
+  "s2_12_31": {
+   "k": 12,
+   "n": 31,
+   "lower": 0.23733101420380248
+  },
+  "rb_transfer_3_5": {
+   "k": 3,
+   "n": 5,
+   "lower": 0.23072428127601285
+  }
+ },
+ "per_category_wilson": {
+  "API_SURFACE": {
+   "k": 6,
+   "n": 6,
+   "lower": 0.6096657120978346,
+   "frozen_lower": 0.6096657120978346,
+   "matches_frozen": true
+  },
+  "SCHEMA_DRIFT": {
+   "k": 3,
+   "n": 3,
+   "lower": 0.4385029682449545,
+   "frozen_lower": 0.4385029682449546,
+   "matches_frozen": true
+  },
+  "PERMISSION_AUTH": {
+   "k": 6,
+   "n": 6,
+   "lower": 0.6096657120978346,
+   "frozen_lower": 0.6096657120978346,
+   "matches_frozen": true
+  },
+  "TOOL_CONTRACT": {
+   "k": 3,
+   "n": 3,
+   "lower": 0.4385029682449545,
+   "frozen_lower": 0.4385029682449546,
+   "matches_frozen": true
+  },
+  "RETRIEVAL_INTEGRITY": {
+   "k": 3,
+   "n": 3,
+   "lower": 0.4385029682449545,
+   "frozen_lower": 0.4385029682449546,
+   "matches_frozen": true
+  }
+ },
+ "fisher": {
+  "rb_transfer_3of5_vs_0of5": {
+   "p_one_sided": 0.08333333333333333,
+   "significant_05": false,
+   "note": "one-sided; transfer better than pooled passive"
+  },
+  "rb_transfer_3of5_vs_pooled_0of10": {
+   "p_one_sided": 0.02197802197802198,
+   "significant_05": true,
+   "note": "sensitivity if passive pooled over two arms (0/10)"
+  },
+  "redesign_24of31_vs_s2_12of31": {
+   "p_one_sided": 0.002105342920833901,
+   "significant_05": true
+  }
+ }
+}

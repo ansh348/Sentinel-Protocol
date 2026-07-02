@@ -1,0 +1,408 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (MiKTeX 25.4) (preloaded format=pdflatex.fmt)
+ restricted \write18 enabled.
+entering extended mode
+(fse_draft4.tex
+LaTeX2e <2025-06-01> patch level 1
+L3 programming layer <2025-09-02>
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/acmart\acmart.cls
+Document Class: acmart 2025/08/27 v2.16 Typesetting articles for the Associatio
+n for Computing Machinery
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/xkeyval\xkeyval.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\xkeyval.tex
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\xkvutils.tex
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\keyval.tex)))
+) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/xstring\xstring.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/xstring\xstring.tex))
+ (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/iftex\iftex.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amscls\amsart.cls
+Document Class: amsart 2020/05/29 v2.20.6
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsmath.sty
+For additional information on amsmath, use the `?' option.
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amstext.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsgen.sty))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsbsy.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsopn.sty))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\amsfonts.sty))
+
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/etoolbox\etoolbox.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype-pdf
+tex.def)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype.cfg
+))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/booktabs\booktabs.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/refcount\refcount.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/ltxcmds\ltxcmds.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/infwarerr\infwarerr.s
+ty))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/totpages\totpages.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/everyshi\everyshi.sty))
+ (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/environ\environ.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/trimspaces\trimspaces.s
+ty)) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/natbib\natbib.sty)
+ (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hyperref.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/kvsetkeys\kvsetkeys.sty
+)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/kvdefinekeys\kvdefine
+keys.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/pdfescape\pdfescape.s
+ty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/pdftexcmds\pdftexcmds
+.sty))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/hycolor\hycolor.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\nameref.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/gettitlestring\gettit
+lestring.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/kvoptions\kvoptions.sty
+)))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\stringenc.s
+ty) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\pd1enc.def
+) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/intcalc\intcalc.sty
+) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\puenc.def)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/url\url.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/bitset\bitset.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/bigintcalc\bigintcalc
+.sty)))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hpdftex.def
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/rerunfilecheck\rerunfil
+echeck.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/uniquecounter\uniquec
+ounter.sty)))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/hyperxmp\hyperxmp.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/ifmtarg\ifmtarg.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/base\ifthen.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/oberdiek\ifdraft.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifluatex.sty))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphicx.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphics.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\trig.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\graphics.c
+fg)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/graphics-def\pdftex.def
+))) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/xcolor\xcolor.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\color.cfg)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\mathcolor.ltx)
+) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifvtex.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.cfg))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/ncctools\manyfoot.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/ncctools\nccfoots.sty))
+
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/pdftex\glyphtounicode
+.tex) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/cmap\cmap.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty<<t1.cm
+ap>>)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/libertine\libertine.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifxetex.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/base\textcomp.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/fontaxes\fontaxes.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/figureversions\figureve
+rsions.sty))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/libertine\LinLibertine_
+I.tex))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/inconsolata\zi4.sty
+`inconsolata-zi4' v1.12, 2019/05/17 Text macros for Inconsolata (msharpe))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\newtxmath.sty
+`newtxmath' v1.754, 2024/09/22 Math macros based originally on txfonts (msharpe
+)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/oberdiek\centernot.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/binhex\binhex.tex)
+amsthm NOT loaded
+) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption3.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption-ams-smf
+.sto))) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/float\float.sty
+) (C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/comment\comment.sty
+Excluding comment 'comment') Excluding comment 'CCSXML'
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/fancyhdr\fancyhdr.sty)
+Special comment 'acks'
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/libertine\t1linuxlibert
+inet-tlf.fd))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/tools\tabularx.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/tools\array.sty))
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/enumitem\enumitem.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/framed\framed.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/listings\listings.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/listings\lstpatch.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/listings\lstmisc.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/listings\listings.cfg))
+Include comment 'screenonly' Excluding comment 'printonly'
+Excluding comment 'anonsuppress' Excluding comment 'acks'
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdf
+tex.def)
+No file fse_draft4.aux.
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\omlnxlmi.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxexa.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\lmsntxsy.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\lmxntxexx.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/libertine\ot1linuxliber
+tinet-tlf.fd)<<ot1.cmap>><<oml.cmap>>
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxmia.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxsym.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxsyc.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/context/base/mkii\supp-pdf.mk
+ii
+[Loading MPS to PDF converter (version 2006.09.02).]
+)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/epstopdf-pkg\epstopdf-b
+ase.sty
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/00miktex\epstopdf-sys.c
+fg))
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/upquote\upquote.sty)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/libertine\t1linuxbiolin
+umt-tlf.fd)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/microtype\mt-msa.cfg)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/microtype\mt-msb.cfg)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/libertine\ts1linuxliber
+tinet-tlf.fd)
+[1.1{C:/Users/anshu/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/
+anshu/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/libertine/lbtn_76gpa5.enc}{
+C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/libertine/lbtn_25t
+csq.enc}{C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/libertine
+/lbtn_nh77jq.enc}{C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/
+libertine/lbtn_7f4ce4.enc}]
+
+Package natbib Warning: Citation `ref27' on page 2 undefined on input line 58.
+
+
+Package natbib Warning: Citation `ref14' on page 2 undefined on input line 58.
+
+
+Package natbib Warning: Citation `ref16' on page 2 undefined on input line 58.
+
+
+Package natbib Warning: Citation `ref22' on page 2 undefined on input line 58.
+
+
+Package natbib Warning: Citation `ref23' on page 2 undefined on input line 60.
+
+
+[2.2{C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/libertine/lbt
+n_7grukw.enc}]
+[3.3]
+
+Package natbib Warning: Citation `ref23' on page 4 undefined on input line 91.
+
+
+Package natbib Warning: Citation `ref24' on page 4 undefined on input line 91.
+
+
+Package natbib Warning: Citation `ref25' on page 4 undefined on input line 91.
+
+
+Package natbib Warning: Citation `ref26' on page 4 undefined on input line 91.
+
+
+Package natbib Warning: Citation `ref6' on page 4 undefined on input line 93.
+
+
+Package natbib Warning: Citation `ref34' on page 4 undefined on input line 93.
+
+
+Package natbib Warning: Citation `ref35' on page 4 undefined on input line 93.
+
+
+Package natbib Warning: Citation `ref36' on page 4 undefined on input line 93.
+
+
+Package natbib Warning: Citation `ref37' on page 4 undefined on input line 93.
+
+
+Package natbib Warning: Citation `ref4' on page 4 undefined on input line 95.
+
+
+Package natbib Warning: Citation `ref5' on page 4 undefined on input line 95.
+
+
+Package natbib Warning: Citation `ref9' on page 4 undefined on input line 97.
+
+
+Package natbib Warning: Citation `ref10' on page 4 undefined on input line 97.
+
+
+Package natbib Warning: Citation `ref11' on page 4 undefined on input line 97.
+
+
+Package natbib Warning: Citation `ref12' on page 4 undefined on input line 97.
+
+
+Package natbib Warning: Citation `ref13' on page 4 undefined on input line 97.
+
+
+Package natbib Warning: Citation `ref8' on page 4 undefined on input line 97.
+
+
+Package natbib Warning: Citation `ref14' on page 4 undefined on input line 99.
+
+
+Package natbib Warning: Citation `ref20' on page 4 undefined on input line 99.
+
+
+Package natbib Warning: Citation `ref15' on page 4 undefined on input line 101.
+
+
+
+Package natbib Warning: Citation `ref17' on page 4 undefined on input line 101.
+
+
+
+Package natbib Warning: Citation `ref16' on page 4 undefined on input line 101.
+
+
+
+Package natbib Warning: Citation `ref18' on page 4 undefined on input line 101.
+
+
+
+Underfull \vbox (badness 4518) has occurred while \output is active
+[4.4]
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/inconsolata\t1zi4.fd)
+
+Package natbib Warning: Citation `ref22' on page 5 undefined on input line 103.
+
+
+
+Package natbib Warning: Citation `ref19' on page 5 undefined on input line 103.
+
+
+
+Package natbib Warning: Citation `ref27' on page 5 undefined on input line 103.
+
+
+
+Underfull \vbox (badness 1377) has occurred while \output is active
+[5.5{C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/inconsolata/i
+4-t1-4.enc}]
+
+Package natbib Warning: Citation `ref4' on page 6 undefined on input line 124.
+
+
+Package natbib Warning: Citation `ref5' on page 6 undefined on input line 124.
+
+
+Underfull \vbox (badness 4686) detected at line 136
+
+Underfull \vbox (badness 2221) has occurred while \output is active
+[6.6]
+Overfull \hbox (14.71178pt too wide) in paragraph at lines 140--141
+\T1/LinuxLibertineT-TLF/m/n/10 (-20) API_SURFACE, SCHEMA_DRIFT, TOOL_CONTRACT, 
+RE-TRIEVAL_INTEGRITY, PER-MIS-SION_AUTH,
+
+Package natbib Warning: Citation `ref30' on page 7 undefined on input line 150.
+
+
+
+[7.7]
+Overfull \hbox (3.57027pt too wide) in paragraph at lines 159--160
+[]\T1/LinuxLibertineT-TLF/b/n/10 (-20) Injection cat-e-gories. \T1/LinuxLiberti
+neT-TLF/m/n/10 (-20) Five cat-e-gories were in-jected in the pi-lot: end-point 
+re-moval (API_SURFACE),
+
+[8.8]
+
+Package natbib Warning: Citation `ref31' on page 9 undefined on input line 171.
+
+
+
+Package natbib Warning: Citation `ref32' on page 9 undefined on input line 171.
+
+
+
+Underfull \vbox (badness 1668) has occurred while \output is active
+[9.9]
+Overfull \hbox (4.76384pt too wide) in paragraph at lines 194--195
+\T1/LinuxLibertineT-TLF/m/n/10 (-20) nal is loud, sus-tained, and status-coded;
+ API_SURFACE 2/6; SCHEMA_DRIFT 1/6; TOOL_CONTRACT
+
+[10.10]
+[11.11]
+[12.12]
+Underfull \vbox (badness 7273) has occurred while \output is active
+[13.13]
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/latex/inconsolata\ts1zi4.fd)
+Underfull \hbox (badness 1789) in paragraph at lines 296--297
+\T1/LinuxLibertineT-TLF/m/n/9 (+20) ert (\T1/LinuxLibertineT-TLF/b/n/9 (+20) ba
+tch S1 0/31, heart-beat S3 0/31\T1/LinuxLibertineT-TLF/m/n/9 (+20) ) and naive 
+\T1/LinuxLibertineT-TLF/b/n/9 (+20) S2 12/31\T1/LinuxLibertineT-TLF/m/n/9 (+20)
+ . On the five \T1/LinuxLibertineT-TLF/m/it/9 (+20) seen \T1/LinuxLibertineT-TL
+F/m/n/9 (+20) cat-e-gories V2
+
+Underfull \hbox (badness 1184) in paragraph at lines 300--301
+[]\T1/LinuxLibertineT-TLF/b/n/9 (+20) Per-category re-call with Wil-son 95% low
+er bounds (seen cat-e-gor-i-cal clause, small n):
+
+[14.14]
+Underfull \vbox (badness 10000) detected at line 308
+
+Underfull \vbox (badness 10000) detected at line 308
+
+[15.15{C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/inconsolata
+/i4-ts1.enc}]
+
+Package natbib Warning: Citation `ref31' on page 16 undefined on input line 312
+.
+
+
+Package natbib Warning: Citation `ref32' on page 16 undefined on input line 312
+.
+
+
+Overfull \hbox (85.47049pt too wide) in paragraph at lines 317--318
+\T1/LinuxLibertineT-TLF/m/n/10 (-20) The ar-chi-tec-ture is cost-positive when 
+\T1/zi4/m/n/10 C + J + p\{}textperiodcentered{}R < p\{}textperiodcentered{}(W_b
+atch
+
+[16.16]
+[17.17]
+[18.18]
+Underfull \vbox (badness 1005) detected at line 372
+
+[19.19]
+[20.20]
+[21.21]
+
+Package natbib Warning: There were undefined citations.
+
+
+[22.22]
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\se-pdfdoc.d
+ef)
+(C:\Users\anshu\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\se-utf8.def
+) [23.22] (fse_draft4.aux
+
+Package natbib Warning: Citation(s) may have changed.
+(natbib)                Rerun to get citations correct.
+
+)
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+
+LaTeX Warning: Temporary extra page added at the end. Rerun to get it removed.
+
+
+Package rerunfilecheck Warning: File `fse_draft4.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+ )
+(see the transcript file for additional information)<C:/Users/anshu/AppData/Loc
+al/Programs/MiKTeX/fonts/type1/public/inconsolata/Inconsolata-zi4b.pfb><C:/User
+s/anshu/AppData/Local/Programs/MiKTeX/fonts/type1/public/inconsolata/Inconsolat
+a-zi4r.pfb><C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/type1/public/new
+tx/LibertineMathRM.pfb><C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/type
+1/public/libertine/LinBiolinumT.pfb><C:/Users/anshu/AppData/Local/Programs/MiKT
+eX/fonts/type1/public/libertine/LinBiolinumTB.pfb><C:/Users/anshu/AppData/Local
+/Programs/MiKTeX/fonts/type1/public/libertine/LinLibertineT.pfb><C:/Users/anshu
+/AppData/Local/Programs/MiKTeX/fonts/type1/public/libertine/LinLibertineTB.pfb>
+<C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/type1/public/libertine/LinL
+ibertineTI.pfb><C:/Users/anshu/AppData/Local/Programs/MiKTeX/fonts/type1/public
+/newtx/txsys.pfb>
+Output written on fse_draft4.pdf (23 pages, 578051 bytes).
+Transcript written on fse_draft4.log.

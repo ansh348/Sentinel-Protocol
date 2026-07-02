@@ -1,0 +1,39 @@
+{
+ "meta": {
+  "read_only": true,
+  "sweep": "1%..60% by 1%",
+  "verdict_rule": "FAIL iff cap < measured clean overhead",
+  "sources": {
+   "v1": "decisions/kill_gates_final.md (frozen KG3: S5 $1.178952 vs S1 $0.340831)",
+   "v2": "runs/matrix_1b/cost_autopsy_v3.json partA (frozen 1bKG3 overhead_fraction)",
+   "v3": "paper fse_focused_v4.tex Table (GPT-5.5 cap-6 = +17.1%, batch denom)"
+  }
+ },
+ "readings": {
+  "v1_pilot": {
+   "overhead": 2.4590515534091675,
+   "label": "v1 pilot (S5 vs S1 clean)",
+   "fail_cap_range_pct": "1%-60%",
+   "fails_entire_sweep": true,
+   "fails_pre_reg_12pct": true,
+   "flip_cap_pct": null
+  },
+  "v2_confirmatory": {
+   "overhead": 0.5549443747171778,
+   "label": "v2 confirmatory redesign",
+   "fail_cap_range_pct": "1%-55%",
+   "fails_entire_sweep": false,
+   "fails_pre_reg_12pct": true,
+   "flip_cap_pct": 56
+  },
+  "v3_second_family": {
+   "overhead": 0.171,
+   "label": "second-family floor (GPT-5.5, cap-6)",
+   "fail_cap_range_pct": "1%-17%",
+   "fails_entire_sweep": false,
+   "fails_pre_reg_12pct": true,
+   "flip_cap_pct": 18
+  }
+ },
+ "pre_registered_cap_pct": 12
+}

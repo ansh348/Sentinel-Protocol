@@ -1470,3 +1470,174 @@ Documented decision only; **no compute, no arm wiring change, no escrow touch, n
 The four-arm confirmatory set and the V2-primary/S2-mandatory reporting rules (T1-confirmed
 byte-unchanged: `prereg_1b.md` @ `6c8cc47`, `decision_memo_phase1.md` @ `e808862`) stand. The
 one-shot matrix is NOT run by this entry.
+
+---
+
+## D34 — Instrumentation-integrity replay non-identity (1/124; characterized + logged)
+
+**Date:** 2026-06-24 — authored AFTER the Phase-1b gate result was readable, stated
+plainly: the matrix banked and the gate reports computed on 2026-06-16
+(`runs/matrix_1b/gate_report.json`, `gate_report_final.json`); this is a truthfully-dated
+post-result characterization, logged visibly rather than left implicit. **Affects:** the
+REPORTING/characterization of the Standing instrumentation-integrity replay precondition
+(`prereg_1b.md` §2 Standing; `decision_memo_phase1.md` §4) and the paper's §7/§10 prose
+(corrected in `paper/fse_draft3.md`, v0.4). **No gate logic, trace, world_config, gate
+report, or ledger is modified.** AMENDS the frozen `prereg_1b.md` (6c8cc47) via its §7
+mechanism only to characterize the precondition's lone non-identity; it changes **no gate
+value, detection count, recall, cost, or the OVERALL FAIL verdict** (FAIL on 1bKG3).
+**Supersedes** the prior draft prose that cited a non-existent "D1 replay diagnosis" — D1
+is the `--bare`/auth-invocation deviation, unrelated to replay; that was a misattribution.
+
+### Finding (verified — `runs/matrix_1b/instrumentation_replay_audit.json`)
+
+The Standing replay (Task-A byte-identity, 100% of injected cells) ran on **124
+injected-class cells: 123 PASS / 1 FAIL** (matches the gate's own aggregate:
+`matrix_gates.instrumentation_replay` → `all_pass=False`, `n_pass=123`).
+
+- **Lone failing cell:** `a1-S3-quota_cliff-s7968` (RESOURCE_BUDGET, S3 arm). The other
+  four a1-S3-quota_cliff seeds (s2594, s5682, s6570, s6820) are byte-identical.
+- **The diff is NOT "+1 in quota_remaining."** It is a **net-neutral ORDER SWAP** of the
+  in-body `quota_remaining` value across two adjacent metered calls, status-identical
+  (200→200), body-only:
+    - counter 12  `GET /pricing/quote/WID-001`              recorded 11 → replayed 12
+    - counter 13  `GET /shipping/rates/THM-002?dest=us-east` recorded 12 → replayed 11
+- **Non-detection:** `detection_relevant=False` for both. The matcher consumes status +
+  body predicates; `quota_remaining` is the in-body mirror of the `X-Quota-Remaining`
+  header (`world/server.py:576`), is not a tripwire target, and headers are not compared.
+  No matcher verdict, metric, or gate quantity depends on it.
+- **Deterministic — NOT "a race under the replay harness":** the audit ran 3 passes,
+  identical every time. The replay is single-threaded and processes calls in counter order.
+  The race is in the **ORIGINAL LIVE RUN**: two concurrent metered requests resolved their
+  **unlocked** quota decrement (`world/server.py:571-576`, no lock) out of counter order;
+  the deterministic replay processes in counter order and so **exposes** the live ordering
+  artifact (the recorded pair is non-monotonic — counter 12 reads 11 while the later
+  counter 13 reads 12, impossible under in-order decrement).
+- **Reach check:** all five V2 a1/quota_cliff (RESOURCE_BUDGET) cells byte-match
+  (mismatch=0). The RB 3/5 generalization result sits on **no** replay-failing cell.
+
+### Disposition (instrument-class, benign)
+
+One non-detection, net-neutral ordering artifact on the non-detecting S3 arm. The Standing
+replay is a **SEPARATE admissibility precondition** in the prereg (`prereg_1b.md` §2 /
+memo §4), reported at parity; `matrix_gates.gate_1bKG1` FOLDS it into the 1bKG1 boolean and
+therefore prints `1bKG1=FAIL` in `gate_report_final.json` even though all four detection
+sub-terms PASS — a code/prereg divergence **recorded here, NOT repaired** (the frozen gate
+logic is untouched per the read-only constraint). **Forward fix = serialize the LIVE
+world's quota decrement** (`world/server.py`), a v3 harness item — NOT "serialize the
+decrement under the replay harness" (the prior wording aimed at the wrong layer).
+
+### Evidence
+
+`runs/matrix_1b/instrumentation_replay_audit.json`, produced by `analysis/replay_audit.py`
+(read-only; reuses `matrix_gates.replay_run_dir` / `instrumentation_replay` / `_read_trace`
+and `replay_check.strip_control` / `NOOP_PATH` and `world.server.create_app` unmodified).
+Reconciled **124/124** per-cell against `matrix_gates.replay_run_dir`, aggregate-matched to
+`matrix_gates.instrumentation_replay` (`all_pass=False`, 123/124), deterministic across 3
+passes.
+
+**Scope:** no gate value, detection count, recall, cost, or the OVERALL FAIL verdict
+changes. Characterization + logging only.
+
+---
+
+## D35 — A7 arm-rationale correction: S2 confirmatory clean FIR is not 0 (characterized + logged)
+
+**Date:** 2026-07-02 — authored during A7 (benign-noise smoke) pre-registration scaffolding;
+ratified by the author. Truthfully-dated post-result characterization of an EXISTING measured
+quantity (the confirmatory matrix banked and its gate reports computed 2026-06-16,
+`runs/matrix_1b/gate_report_final.json`). **Affects:** the REPORTING/rationale statement in
+`analysis/v5_hardening/A7_benign_noise_smoke_PREREG.md` (Design → Arms) and the paper's Threats
+prose (`paper/fse_focused_v5.tex`). **No gate logic, trace, world_config, gate report, ledger,
+detection count, recall, cost, or verdict is modified.** The correction is recorded in
+`analysis/v5_hardening/A7_benign_noise_smoke_ADDENDUM_2026-07-02.md`; the frozen A7 pre-reg file
+itself is **NOT edited** (read-only custody). AMENDS the A7 mini pre-registration via its
+addendum mechanism.
+
+### Finding (verified)
+
+The A7 pre-reg's Design line states the arms are *"redesign (V2) and S2 (passive baseline), the
+two arms with FIR 0.0 in the confirmatory study."* Accurate for **V2**, inaccurate for **S2**:
+
+- **V2 (redesign):** total clean false-interrupts = **0** — gate `1bKG2`
+  (`runs/matrix_1b/gate_report_final.json`: clean median FIR 0.0, P95 0.0, max false-interrupts
+  0) and `docs/v3_archaeology.md:135`.
+- **S2 (naive-interrupt arm — NOT "passive"):** **false-fired on 4 clean cells** — a1 seeds
+  1/2/3 and d1 seed 1; FIR 1.0 on those cells (`docs/v3_archaeology.md:134-135`; corroborated by
+  `paper/fse_focused_v5.tex:633`). S2's confirmatory clean FIR is therefore **not 0.0**.
+
+The same inaccurate "naive baseline's clean false-alarm rate of 0" framing appears in the paper's
+Threats setup (`paper/fse_focused_v5.tex:924`), internally inconsistent with the same section's
+lines 633 (four false alarms) and 634 ("zero floor").
+
+### Why it matters
+
+For **V2**, A7 tests the intended question (does a genuinely FIR-0.0 arm false-fire under benign
+noise?). For **S2**, the noiseless-clean FIR is **already nonzero (4 cells)**, so A7's S2 result
+is a comparison of noisy-clean FIR vs an already-nonzero noiseless-clean FIR (a within-study
+reference), **not** "does a 0.0 arm break." S2 stays in A7, described correctly. This corrects a
+REPORTING/rationale statement, **not a measured quantity**: S2's four clean false-fires were
+always in the banked data; only the one-line summary of them mis-stated them.
+
+### Disposition (benign; characterization + correction)
+
+1. The A7 addendum records the accurate characterization (only V2 is clean-FIR-0.0; S2 is the
+   naive-interrupt arm with clean FIR 1.0 on a1 s1/s2/s3, d1-s1).
+2. The frozen A7 pre-reg is **NOT edited** — the correction lives in the addendum (read-only
+   custody).
+3. Paper Threats setup sentence **CORRECTED** at `paper/fse_focused_v5.tex:923-925` (2026-07-02,
+   author-authorized this session). The optimistic-bound claim is now narrowed to the redesign's
+   clean FIR 0 only; S2's four clean false-fires are cited as the naive baseline already leaking
+   in the noiseless world (`\S7`, consistent with `:633`). **Reconcile note CLOSED.**
+
+### Evidence
+
+`docs/v3_archaeology.md:134-135`; `runs/matrix_1b/gate_report_final.json` (1bKG2 clean FIR 0/0/0
+for V2); `paper/fse_focused_v5.tex:633`.
+
+**Scope:** no gate value, detection count, recall, cost, or verdict changes. Characterization +
+correction of a reporting/rationale statement only.
+
+---
+
+## D36 — A7 latency surface: constant elapsed_ms envelope (design note, frozen before Phase-2 code)
+
+**Date:** 2026-07-02 (A7 build window; committed BEFORE any Phase-2 noise code, D28–D32 style).
+**Affects:** the A7 benign-noise build only — `RunConfig.noise_profile` gating + `world/noise.py`
++ `world/server.py` response decoration. Ratifies the latency mechanism the A7 addendum (§4) left
+to a Phase-1 pick. AMENDS the A7 mini pre-registration via its addendum mechanism. Category-blind;
+gated behind `noise_profile` (default None → flag-off byte-identical to Phase 1).
+
+### The ruling (author-ratified 2026-07-02)
+
+Latency is surfaced as **Option (a): a seed-derived `elapsed_ms` envelope value field**, with the
+constant-envelope mitigation EXTENDED:
+
+1. `elapsed_ms` is present on **EVERY A7 response** — all 3 anomaly classes (transient_500,
+   latency_spike, additive_field), the S1 qualification runs, and all arms (V2/S2/S1). Its
+   presence is a **constant envelope**, never a per-class signal.
+2. Its value is **seed-derived** (a per-run baseline from the A7 noise RNG) and **spikes only in
+   latency_spike cells**, on the seed-derived scheduled call. No real delay, no `sleep`, no
+   wall-clock — a value only, preserving `state.py`'s "no wall-clock values ever enter response
+   payloads" invariant.
+3. The additive_field class's test signal is a **distinct, separate** extra field, so its presence
+   is not confounded with the constant elapsed_ms envelope.
+
+### Recorded consequences (author-required)
+
+(i) **V2's latency FIR is near-predetermined at ~0**: no compiled probe targets elapsed time, so
+V2 cannot fire on the latency value. The latency class is therefore read as **primarily an S2
+test** (does a naive-interrupt arm escalate on a slow-but-correct response?), with **V2 as the
+designed-silence contrast** (a monitor that observes only what its probes target does not
+false-fire on an unobserved dimension). Disclosed designed reading, not a null result.
+
+(ii) **The A7 world differs from the confirmatory world** by this always-present elapsed_ms field.
+**Acceptable under A7's exploratory status** (post-hoc robustness probe, attached to Edit 3 only;
+the confirmatory FIR 0.0 and its world are unchanged). The difference is gated behind
+`noise_profile`: banked/confirmatory configs lack the field → flag-off responses are
+byte-identical (the Phase-2 admissibility gate).
+
+### Scope
+
+Design commitment only; no measured confirmatory quantity changes; no benchmark/held-out/escrow
+touch. All behavior gated behind `noise_profile` (default None → byte-identical). The Phase-2
+build implements exactly this; any later change to the mechanism is a new logged deviation.

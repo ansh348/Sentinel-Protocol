@@ -28,9 +28,11 @@ from world.surface import derive_surface as _derive_surface_rev1
 
 
 @functools.lru_cache(maxsize=8)
-def openapi_paths_for_rev(world_rev: int) -> dict:
+def openapi_paths_for_rev(world_rev: int, n_regions=None) -> dict:
     """The rev-N world's OpenAPI paths. Rev 1 returns the Phase-1 spec VERBATIM
-    (byte-identical); rev >= 2 builds a rev-N app and reads its spec."""
+    (byte-identical); rev >= 2 builds a rev-N app and reads its spec. n_regions
+    (additive, default None = byte-identical) registers the benchmark_1c regions
+    surface so its paths are visible; None -> regions router off -> byte-identical."""
     if world_rev <= 1:
         return _openapi_paths()
     from world.server import create_app
@@ -38,7 +40,7 @@ def openapi_paths_for_rev(world_rev: int) -> dict:
     os.close(fd)
     app = create_app(RunConfig(run_id="surface-rev", seed=0, system="surface",
                                task_id="surface", trace_path=trace_path,
-                               world_rev=world_rev))
+                               world_rev=world_rev, n_regions=n_regions))
     paths = dict(app.openapi()["paths"])
     app.state.ctx.trace.close()
     try:

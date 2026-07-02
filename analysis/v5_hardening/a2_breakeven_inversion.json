@@ -1,0 +1,42 @@
+{
+ "meta": {
+  "read_only": true,
+  "model": "phase1b_precommitments SSF.1 (redesign, J=0)",
+  "params_source": "runs/matrix_1b/fanout_model_inputs.json v2_estimated_from_1b",
+  "baseline_B_source": "cost_autopsy_v3.json partA s1_clean_median_total"
+ },
+ "params": {
+  "C": 0.171401,
+  "R": 0.2210485,
+  "dW_injected": 0.068172,
+  "n0": 3,
+  "B_baseline": 0.234246,
+  "cap": 0.12
+ },
+ "frozen_model_at_n0": {
+  "note": "At measured fan-out n0=3, R (0.2210) > dW (0.0682); max tolerable clean overhead M*(p,3) is NEGATIVE for all p.",
+  "M_star_usd_by_p": {
+   "0.05": -0.007643825000000002,
+   "0.1": -0.015287650000000003,
+   "0.25": -0.03821912500000001,
+   "0.5": -0.07643825000000001
+  },
+  "admits_positive_breakeven_at_n0": false,
+  "free_monitor_turns_positive_at_fanout_n": 10,
+  "appendix_b_crossover": {
+   "0.1": 86,
+   "0.25": 40,
+   "0.5": 25
+  }
+ },
+ "recovery_locator": {
+  "note": "Drops the replan term; monitoring pays iff clean overhead M < p*dW. Post-hoc, generous to the monitor.",
+  "max_clean_overhead_fraction_by_p": {
+   "0.05": 0.014551369073538075,
+   "0.1": 0.02910273814707615,
+   "0.25": 0.07275684536769036,
+   "0.5": 0.14551369073538073
+  },
+  "p_star_for_12pct_cap": 0.4123323358563633
+ }
+}

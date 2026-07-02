@@ -17,3 +17,9 @@ __pycache__/
 
 # IDE
 .idea/
+
+# secrets — never commit API keys (ANTHROPIC_API_KEY etc. live in .env)
+.env
+.env.*
+*.env
+!.env.example
