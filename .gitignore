@@ -2,6 +2,10 @@
 runs/*
 !runs/.gitkeep
 
+# replication-package zips are staged locally for off-machine copy, never committed;
+# only archives/MANIFEST.sha256 (the ZIP checksums) is committed
+archives/*.zip
+
 # escrowed holdout draw (public repo: drawn 1b values must never be committed;
 # only the SHA-256 recorded in decisions/holdout_escrow_record.md is public)
 escrow/
