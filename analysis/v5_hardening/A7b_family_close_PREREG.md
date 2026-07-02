@@ -8,8 +8,8 @@ this pre-reg before any run.
 
 **RATIFIED by the author on 2026-07-03T02:29:30+0530**, before any run. Ratified by the author via
 explicit recorded instruction; commit executed by the assistant on the author's authorization;
-hash backfilled in follow-up. Ratifying commit: **[POST-COMMIT BLANK — backfilled after the
-commit]**.
+hash backfilled in follow-up. Ratifying commit: **3a36491d043622a232b95551a71ca1b93f8644ea**
+(2026-07-03T02:30:05+05:30).
 
 ## Motivation
 A7 (2026-07-03) found: (1) its nonzero mechanical false-interrupts were **task-intrinsic**, not
