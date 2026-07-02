@@ -171,7 +171,8 @@ is not.
 
 \textbf{This is not a system that failed at its only job.} Where signals
 recur, it detects about 3$\times$ faster than the obvious alternative. It
-injures \emph{zero} clean runs, where both its own predecessor and the naive
+injures \emph{zero} clean runs in the noiseless mock (Section~10 measures the deployment
+bound under benign noise), where both its own predecessor and the naive
 baseline raise false alarms. And it carries part of its skill to fault types it
 was never shown. The cost failure is not the absence of value. It is that the
 value does not yet clear the cost of looking. Section 8 shows that this cost
@@ -622,7 +623,8 @@ comparison-based system, ours included.
 \textbf{The first version's pathology, reversed.} The first version's
 signature---a rubber-stamped flood of false alarms that starved detection and
 hurt clean runs---is gone. Clean-run false-alarm rate is 0 (median, 95th
-percentile, and max), with zero grind-deaths. Its clean-run success (8 of 12)
+percentile, and max) in the noiseless world (no benignly volatile fields; \S10),
+with zero grind-deaths. Its clean-run success (8 of 12)
 trails batch's (9 of 12) by a single run, and all four of its clean failures
 occurred at \emph{zero} interrupts---worker-deliverable shortfalls (missing
 citations, unset fields, validation not run) that the no-monitor baseline shows
@@ -933,9 +935,38 @@ here a probe costs nothing and perturbs nothing, but a probe against a
 probe is potentially self-defeating live. The mock is generous to the noise
 result exactly as it is harsh to the cost result, and this paper leans on both
 directions: we accept the conservative cost verdict, so we must flag the
-optimistic noise one. \textbf{[AUTHOR-INPUT: A7 (benign-noise smoke) is
-pre-registered but not yet run; if run, replace this concession with the measured
-bound and cite the A7 mini pre-registration.]}
+optimistic noise one.
+
+A pre-registered benign-noise probe (A7, with a family-closing follow-up A7b, one
+seed per cell) injected three recoverable non-fault anomalies---a transient
+500-then-success, an elevated-latency value, and a backward-compatible extra
+field---into the redesign and the naive baseline on clean tasks, with a noiseless
+control isolating the noise from run-to-run variance on the same CLI. Each ran
+under its own dated mini pre-registration with predictions frozen before the run;
+all three frozen predictions were refuted and are retained in the record. Benign
+noise produces false interrupts in the redesign, selectively by channel. Against
+content noise---a backward-compatible extra field---the redesign false-fires: its
+compiled schema probe is a full-field-set fingerprint, so an added field changes
+the fingerprint and the monitor reports a schema-shape drift even though every
+required field and value is unchanged (the noiseless control interrupted zero of
+nine runs; the same seeds interrupted once the field was present). That
+sensitivity is the capability, not a defect in itself: comparison against a
+reference is what detects at all, and separating benign drift from a real break
+would need the plan-level reasoning whose cost is the subject of \S8. Against a
+one-shot status transient---a 500 that heals on retry---the redesign does not fire
+on any surface, because its probes read a perturbation-isolated side channel and a
+single healed transient on the worker path is essentially never co-observed in
+this design (and never, by construction, under our injection); the naive baseline
+does escalate on the transient, but the orchestrator dismisses it. No run suffered
+a grind-death, so the \S6 self-starvation mechanism did not manifest here. The
+confirmatory clean false-alarm rate of 0 therefore remains the noiseless-world
+figure and an upper bound: it survives a one-shot benign transient but not a
+benign content addition, and sustained status noise is untested---the bound does
+not extend to it. Three limitations qualify the reading: one seed per cell with
+nondeterministic agents (a matched-seed, not byte-identical, control); the added
+field the monitor trips on is our own always-present envelope, a realistic but
+synthetic anomaly; and the probe ran on a newer CLI than the frozen confirmatory
+pin, which the noiseless control mitigates but does not eliminate.
 
 \textbf{The redesign learned from the pilot's traces.} That is a real leak, and
 we mitigate it rather than hide it: fresh fault settings the designers never
