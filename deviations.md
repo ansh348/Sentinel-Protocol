@@ -1641,3 +1641,33 @@ byte-identical (the Phase-2 admissibility gate).
 Design commitment only; no measured confirmatory quantity changes; no benchmark/held-out/escrow
 touch. All behavior gated behind `noise_profile` (default None → byte-identical). The Phase-2
 build implements exactly this; any later change to the mechanism is a new logged deviation.
+
+---
+
+## D37 — A7 ran on CLI 2.1.198, not the frozen confirmatory pin 2.1.170 (version confound on record)
+
+**Date:** 2026-07-03 (A7 Phase-3 run window; logged WITH the results, truthfully dated after the
+run). **Affects:** the interpretation of the A7 (benign-noise smoke) exploratory results against
+the confirmatory false-alarm baseline. Same class as **D21** (CLI auto-updater drift). AMENDS the
+A7 mini pre-registration record. No confirmatory quantity changes.
+
+### Finding
+The A7 matrix (2026-07-03, `runs/a7/`) executed on **CLI 2.1.198** — the auto-updater's current
+version on this machine. The confirmatory FIR-0.0 baseline it is compared against was measured on
+the frozen custody pin **CLI 2.1.170** (`prereg.md`). A7's mechanical false-interrupt count is
+nonzero (V2 3 replans/9 cells, S2 1/9), but the forensic evidence attributes it to **task-intrinsic
+monitor/worker behavior, NOT the injected noise**
+(`analysis/v5_hardening/A7_PHASE3_4_RESULTS_2026-07-03.md`). Because A7 has **no within-run noiseless
+2.1.198 control**, the A7↔confirmatory comparison **cannot separate a noise effect from a
+CLI-version effect** — the nonzero A7 interrupts could be a 2.1.198 behavior change rather than a
+noise effect.
+
+### Disposition (confound on record; A7 stays exploratory)
+A7 is a post-hoc exploratory probe (attaches to Edit 3 only); the confirmatory FIR 0.0 (2.1.170,
+noiseless) is unchanged. This deviation records the version confound so the A7 result is never read
+as a clean noise-FIR measurement. The **A7b noiseless control** (V2 on a1/b1/c1, noise off, CLI
+2.1.198; A7b mini pre-reg scaffolded 2026-07-03) is the follow-up that isolates the version effect
+from the noise effect.
+
+**Scope:** no gate value, detection count, recall, cost, or verdict changes. Records a version
+confound on the exploratory A7 result.
