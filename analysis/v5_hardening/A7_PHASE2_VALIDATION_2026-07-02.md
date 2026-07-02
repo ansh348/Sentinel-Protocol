@@ -88,3 +88,15 @@ not fabricable offline (they need real workers).
   **CLOSED**.
 - **Phase 3 remains gated** on the author's explicit go after the pre-flight summary. No metered
   spend.
+
+## 9. Departure note — carry forward to the Phase 3 report (NOT a numbered deviation)
+
+The A7 addendum was **ratified in a combined checkpoint commit**
+(`7a3807fe449ff12786fa81507c9af15f496fde71`, 2026-07-02T23:31:16+05:30), **not** an isolated A7
+commit: at freeze time the working tree held substantial pre-existing uncommitted work
+(benchmark_1c; V2nc `deterministic_select`; the D34 entry; the untracked `paper/` tree)
+interleaved with the A7 artifacts at file level, which `git add -p` could not cleanly separate.
+All of it landed together under an enumerating attribution message, which is the provenance
+record. This is a **note, not a numbered deviation** — no measured A7 quantity is affected, and
+the ratification and its before-the-run timing are intact. **The Phase 3 report must reproduce
+this note in its departure section.**

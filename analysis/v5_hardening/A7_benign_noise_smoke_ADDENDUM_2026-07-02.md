@@ -10,9 +10,9 @@ recorded before any run) below. The addendum is timestamp-committed (see M1) bef
 A7 run.
 
 **RATIFIED by the author on 2026-07-02**, before any run. Ratification timestamp (frozen in
-this file): **2026-07-02**. Ratifying commit hash: **[POST-COMMIT BLANK — backfilled after the
-commit; per convention the commit message carries the ratification and the file carries the
-timestamp]**.
+this file): **2026-07-02**. Ratifying commit: **7a3807fe449ff12786fa81507c9af15f496fde71**
+(2026-07-02T23:31:16+05:30) — a combined checkpoint; the commit message is the attribution
+record and the custody footer explains why A7 landed in a combined commit.
 
 Provenance of every decision below: author message 2026-07-02 (M1–M6 + discrepancy + metric
 note). Nothing here is invented; blanks are left blank.
@@ -229,10 +229,14 @@ should still include S2 (per author decision), but described correctly.
 
 ## Custody footer
 
-Drafted 2026-07-02; M2/M4/M6 finalized per author decisions 2026-07-02. **No code changed, no
-run executed, no spend incurred.** The frozen base pre-reg (`A7_benign_noise_smoke_PREREG.md`)
-is **untouched**. **Remaining items that gate the run:** (1) **M3 prediction text** — the author
-is writing it directly in this file; (2) the **M1 ratification block** — the author inserts the
-real timestamp + commit hash and commits. M2 (cap basis), M4 (seeds 4–15), and M6 (per-cell
-qualification rule) are resolved above. On the author's commit, proceed to **Phase 1 (inventory
-& plan, no spend)**.
+Drafted 2026-07-02; M1–M6 finalized and ratified 2026-07-02. **RATIFIED and committed** in the
+combined checkpoint `7a3807fe449ff12786fa81507c9af15f496fde71` (2026-07-02T23:31:16+05:30). That
+commit is **not** an isolated A7 commit: A7 artifacts were interleaved at file level with
+substantial pre-existing uncommitted work (benchmark_1c; V2nc `deterministic_select`; the D34
+deviation entry; the previously-untracked `paper/` tree), which `git add -p` could not cleanly
+separate, so all of it landed together. The commit message is the **attribution record**
+enumerating each body of work — a reviewer tracing provenance finds the explanation there and in
+this note. The ratifying hash is backfilled into M1 above by a tiny follow-up commit (`A7:
+backfill ratification hash`). Offline Phase 1–2 are complete and validated (flag-off byte-identity
+3/3, suite 433 passed); **Phase 3 (the metered run) is UNBLOCKED pending the author's explicit
+"go" — no metered spend has occurred.**
