@@ -403,6 +403,7 @@ class WorldState:
         self.noise_rng: Optional[random.Random] = None
         self.noise_500_trigger: Optional[int] = None
         self.noise_500_fired: bool = False
+        self.noise_500_target: Optional[str] = None   # A7b monitored-surface glob (default None)
         self.noise_latency_trigger: Optional[int] = None
         self.noise_elapsed_base_ms: Optional[int] = None
         self.noise_elapsed_spike_ms: Optional[int] = None
@@ -414,6 +415,9 @@ class WorldState:
             nc = config.noise_profile.noise_class
             if nc == "transient_500":
                 self.noise_500_trigger = 1 + self.noise_rng.randrange(2)
+                # A7b: optional target-surface glob — the 500 lands on the first worker call
+                # whose path matches it, instead of the first call overall (default None).
+                self.noise_500_target = config.noise_profile.params.get("target_surface")
             elif nc == "latency_spike":
                 self.noise_latency_trigger = 1 + self.noise_rng.randrange(3)
             elif nc == "additive_field":

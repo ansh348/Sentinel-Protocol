@@ -33,12 +33,20 @@ def active(state: "WorldState") -> bool:
     return state.config.noise_profile is not None
 
 
-def trip_transient_500(state: "WorldState", n: int) -> bool:
-    """True exactly once, at (or after) the seed-derived trigger call, on a transient_500
-    run; marks it fired so the retry heals. Always False for every other class and for
-    non-A7 runs (trigger is None) -- and it mutates no state in those cases, so those runs
-    stay byte-identical."""
+def trip_transient_500(state: "WorldState", n: int, path: str) -> bool:
+    """True exactly once, then the retry heals. Default (noise_500_target is None): fires at
+    the seed-derived trigger call, whatever surface that is (A7 behavior). A7b: when a target
+    surface glob is set, fires on the FIRST worker call whose path matches it (monitored-surface
+    placement). Always False for every other class and for non-A7 runs (trigger is None), with
+    no state mutation, so those runs stay byte-identical."""
     if state.noise_500_trigger is None or state.noise_500_fired:
+        return False
+    target = state.noise_500_target
+    if target is not None:
+        from fnmatch import fnmatchcase
+        if fnmatchcase(path, target):
+            state.noise_500_fired = True
+            return True
         return False
     if n >= state.noise_500_trigger:
         state.noise_500_fired = True

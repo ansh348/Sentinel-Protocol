@@ -432,7 +432,7 @@ class WorldMiddleware:
         # seed-derived trigger call 500s once at the boundary, then heals — a retry
         # dispatches normally. Benign: no state mutated; S1 recovers (qualification).
         # Off (no-op, no state change) for every non-A7 run → Phase-1 byte-identical.
-        if noise.trip_transient_500(state, n):
+        if noise.trip_transient_500(state, n, path):
             # Record WHICH call the transient landed on (token vs first surface call)
             # so FIR scoring can separate "monitor saw the anomaly and stayed calm"
             # from "anomaly never reached an observed surface" (author spec, A7).

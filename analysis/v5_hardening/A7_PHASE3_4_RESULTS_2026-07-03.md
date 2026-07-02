@@ -4,6 +4,13 @@
 (`A7_benign_noise_smoke_ADDENDUM_2026-07-02.md`, ratified in checkpoint `7a3807fe`). Attaches
 to Edit 3 ONLY. The confirmatory FIR of 0.0 is the noiseless-world figure and is NOT altered.**
 
+> ⚠ **READER NOTE (2026-07-03):** the A7-only verdict in the first half of this report
+> ("interrupts task-intrinsic; ~0 noise-attributable; does **not** re-open self-starvation") is
+> **CORRECTED by the A7b closing section at the bottom.** The A7b noiseless control (0/9) shows the
+> A7 interrupts were **noise-caused** (the D36 `elapsed_ms` envelope), not task-intrinsic. Read the
+> A7b closing section and the consolidated Threats paragraph for the final verdict; the A7 section
+> is retained unedited as the as-written post-hoc record.
+
 ## Run summary
 - **Matrix COMPLETE**: 36/36 jobs. **Total modeled cost $8.7475** — the $15 cap was **not** bound.
 - **Run date 2026-07-03**, ratification 2026-07-02 (before-the-run ordering holds). **CLI 2.1.198.**
@@ -125,3 +132,105 @@ Replaces the `[AUTHOR-INPUT: A7]` placeholder at `fse_focused_v5.tex` ~line 935:
    the noise mechanism, not a monitor result.
 5. **d1 disqualification confound** and **single seed per cell** (exploratory, per the frozen design).
 ```
+
+---
+
+# A7b — closing section (family close; corrects the A7 verdict above)
+
+**A7b matrix COMPLETE: 13/13, $4.9649 (under the $8 cap). CLI 2.1.198, run 2026-07-03.** Ratified
+pre-reg `A7b_family_close_PREREG.md` (`3a36491d`); arm-(b) target surface `/pricing/quote/{sku}`
+pinned by the frozen rule (`A7b_PHASE2_note_2026-07-03.md`). Ledger `runs/a7b/a7b_results.jsonl`.
+
+## A7b results (computed once; ledger v2_interrupts + firing evidence)
+```
+ARM (a) NOISELESS CONTROL — V2, noise OFF, a1/b1/c1 at seeds 4/5/6, 7/8/9, 10/11/12
+  v2_interrupts: 0 on ALL 9 cells;  total escalations across 9 cells: 0
+  -> V2 clean FIR = 0 noiseless (these seeds, CLI 2.1.198)
+
+ARM (b) MONITORED-SURFACE TRANSIENT-500 — V2, a1 seeds 16-19, 500 on /pricing/quote/*
+  v2_interrupts: 1 on ALL 4 cells;  landing: /pricing/quote/WID-001 (surface) every cell
+  firing surface: /shipping/rates/* (all 6 SKUs) every cell — NOT /pricing/quote
+  -> the transient-500 produced ZERO escalations on its own surface; the interrupt was the
+     elapsed_ms envelope on /shipping/rates (the SAME mechanism as A7)
+```
+
+## Prediction vs measured (both REFUTED — decisively, and instructively)
+| arm | frozen prediction | measured | verdict |
+|---|---|---|---|
+| (a) | interrupts REPRODUCE noiseless (V2 clean FIR ≠ 0; the A7 firings were task/CLI-intrinsic) | **0/9 interrupts** — did NOT reproduce | **REFUTED**: the A7 interrupts were **noise-caused**, not task-intrinsic; V2 clean FIR **is** 0 noiseless |
+| (b) | the status fast path FIRES on a monitored-surface transient-500 (the M3 bet) | the 500 on `/pricing/quote` fired **nothing**; V2 fired on `/shipping/rates` (the envelope) | **REFUTED**: V2's status detection is **side-channel-isolated** from the worker-path 500 |
+
+## CORRECTION of the A7 verdict above (at full prominence)
+The A7 section above concluded the interrupts were **task-intrinsic** and **~0 noise-attributable**,
+and that benign noise **does not** re-open self-starvation. **The A7b arm-(a) noiseless control
+overturns this.** At the *same seeds* on the *same CLI* with noise **off**, V2 produced **0**
+interrupts (9/9 clean); with noise **on** (A7), the same seeds interrupted. The interrupts were
+**noise-caused**. What I mis-read in A7 as "task-intrinsic" (V2 firing the *same* surfaces across
+noise classes) was in fact the **constant `elapsed_ms` envelope (D36)** — present in *every*
+noise-active run of *every* class — tripping V2's value/content probes on `/shipping/rates` and
+`/inventory/items`. The A7 "unmonitored surface" phrasing was also imprecise (D-refinement in the
+Phase-2 note): `/auth/token` *was* armed; the transient-500 simply cannot reach V2 (side-channel).
+
+## Consolidated finding (A7 + A7b)
+Benign noise **DOES** re-open V2 false interrupts, **selectively by channel**:
+- **CONTENT noise (an additive / envelope field): V2 FALSE-FIRES via a CLOSED-WORLD SCHEMA
+  FINGERPRINT** (mechanism pinned — forensic check, 2 firing cells). The `/shipping/rates` probe
+  carries a `schema_fingerprint` lens with a `proof_baseline` comparison; the arm-time baseline
+  fingerprints the 5-field body `{sku,dest,rate,carrier,est_days}`, the worker read gains the D36
+  `elapsed_ms` envelope (and, in the additive class, `advisory`), so the fingerprint differs and the
+  verdict is `"drift instantiates schema_shape"` (grade=interrupt). **It fired because the FIELD
+  APPEARED — a full-field-set fingerprint is closed-world — NOT because any value drifted** (every
+  required field and value is unchanged). This contradicts A7's M3 assumption ("schema probes are
+  equality-on-required-fields, not closed-world"): the compiled lens is a fingerprint an additive
+  field breaks. Arm-(a) control: 0 without the field; A7 + arm (b): present with it.
+- **STATUS noise (a ONE-SHOT transient-500-that-heals): V2 does NOT fire.** A one-shot worker-path
+  transient is structurally invisible to V2's side-channel probes — encounter probability is
+  near-zero in any deployment (a probe would have to read the same surface inside the single healed
+  window) and **exactly zero under our fire-once injection design** (the probe channel is undecorated
+  by construction). So it is invisible on ANY surface (arm (b): the 500 on the most-armed surface
+  fired nothing; V2 fired on the envelope instead). **SUSTAINED status noise is UNTESTED; this claim
+  does not extend to it.** (S2, the naive arm, *did* escalate on the 500 in A7, dismissed by the
+  orchestrator.)
+- **No grind-deaths in either study.** The confirmatory FIR of 0.0 is the noiseless figure and an
+  upper bound: it **survives a one-shot benign transient** but **not a benign content addition**;
+  sustained status noise is untested and the bound does not extend to it.
+
+## Caveats bounding the reading
+LLM nondeterminism (single seed per cell; V2 runs are not byte-identical A/Bs — the noise-on/off
+comparison is matched-seed, not deterministic); the `elapsed_ms` envelope is a **D36 synthetic
+field** (its false-firing is a realistic additive-field result, but the envelope is our design
+choice); **arm-(b) confound** — the transient_500 profile carries the D36 envelope, so arm (b)'s
+interrupt is the envelope, not the 500 (the firing evidence — 0 escalations on `/pricing/quote` —
+still shows the fast path did not fire on the 500); CLI 2.1.198 vs frozen 2.1.170 (D37, now
+largely controlled by arm (a) on the same CLI). 
+
+## Family close
+**A7b closes the A7 family. No further probes are proposed**, regardless of outcome — per the
+ratified pre-reg. The open threads (content-probe additive-field fragility; side-channel status
+isolation) are architecture findings for a future study, not more noise probes.
+
+## CONSOLIDATED Threats replacement paragraph (A7 + A7b; DRAFT — DO NOT APPLY)
+Supersedes the A7-only draft above. Replaces the `[AUTHOR-INPUT: A7]` placeholder at
+`fse_focused_v5.tex` ~line 935. For author review only; no paper edit made.
+
+> A pre-registered benign-noise probe (A7, with a family-closing follow-up A7b, one seed per cell)
+> injected three recoverable non-fault anomalies — a transient 500-then-success, an elevated-latency
+> value, and a backward-compatible extra field — into the redesign and the naive baseline on clean
+> tasks, with a noiseless control isolating the noise from run-to-run variance on the same CLI.
+> Benign noise re-opens the redesign's false interrupts, selectively by channel. Against content
+> noise — a backward-compatible extra field — the redesign false-fires: its compiled schema probe is
+> a full-field-set fingerprint, so an added field changes the fingerprint and the monitor reports a
+> schema-shape drift even though every required field and value is unchanged (the noiseless control
+> interrupted zero of nine runs; the same seeds interrupted once the field was present). Against a
+> one-shot status transient — a 500 that heals on retry — the redesign does not fire on any surface,
+> because its probes read a perturbation-isolated side channel and a single healed transient on the
+> worker path is essentially never co-observed (and never, by construction, under our injection);
+> the naive baseline does escalate on the transient, but the orchestrator dismisses it. No run
+> suffered a grind-death, so the Section~6 self-starvation mechanism did not manifest here. The
+> confirmatory clean false-alarm rate of 0 therefore remains the noiseless-world figure and an upper
+> bound: it survives a one-shot benign transient but not a benign content addition, and sustained
+> status noise is untested — the bound does not extend to it. Three limitations qualify the reading:
+> one seed per cell with nondeterministic agents (a matched-seed, not byte-identical, control); the
+> added field the monitor trips on is our own always-present envelope, a realistic but synthetic
+> anomaly; and the probe ran on a newer CLI than the frozen confirmatory pin, which the noiseless
+> control mitigates but does not eliminate.

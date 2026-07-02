@@ -137,3 +137,25 @@ def test_same_seed_same_schedule():
     assert a.noise_latency_trigger == b.noise_latency_trigger
     assert a.noise_elapsed_base_ms == b.noise_elapsed_base_ms
     assert a.noise_elapsed_spike_ms == b.noise_elapsed_spike_ms
+
+
+# -- A7b: transient_500 monitored-surface placement (target_surface param) -----------------
+
+def test_transient_500_target_surface_lands_on_that_surface(tmp_path):
+    cfg = RunConfig(
+        run_id="a7b", seed=16, system="V2", task_id="a1",
+        trace_path=str(tmp_path / "t.jsonl"),
+        noise_profile=NoiseProfile(noise_class="transient_500",
+                                   params={"target_surface": "/pricing/quote/*"}))
+    client = TestClient(create_app(cfg), raise_server_exceptions=False)
+    tok = client.post("/auth/token", headers=HDR).json()["token"]   # token != target -> 200
+    hdr = {**HDR, "Authorization": f"Bearer {tok}"}
+    assert client.get("/inventory/items", headers=hdr).status_code == 200   # non-target -> 200
+    r1 = client.get("/pricing/quote/WID-001", headers=hdr)          # first target hit -> 500
+    assert r1.status_code == 500
+    assert r1.json()["error"] == "internal_error"
+    r2 = client.get("/pricing/quote/WID-001", headers=hdr)          # retry heals
+    assert r2.status_code == 200
+    # only one 500 total
+    assert all(client.get("/pricing/quote/GAD-001", headers=hdr).status_code == 200
+               for _ in range(3))

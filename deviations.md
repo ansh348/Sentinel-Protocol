@@ -1671,3 +1671,43 @@ from the noise effect.
 
 **Scope:** no gate value, detection count, recall, cost, or verdict changes. Records a version
 confound on the exploratory A7 result.
+
+---
+
+## D38 — A7's "task-intrinsic / does not re-open" verdict OVERTURNED by the A7b noiseless control
+
+**Date:** 2026-07-03 (A7b family-close run; logged WITH the A7b results). **Affects:** the A7
+exploratory verdict (`analysis/v5_hardening/A7_PHASE3_4_RESULTS_2026-07-03.md`) and the consolidated
+Threats draft. AMENDS the A7 mini pre-registration record. **No confirmatory quantity changes** —
+this corrects an exploratory finding, not a gate.
+
+### Finding
+The A7 report concluded V2's nonzero false-interrupts were **task-intrinsic** (~0 noise-attributable)
+and that benign noise **does not** re-open the §6 self-starvation mechanism. The **A7b noiseless
+control overturns this**: V2 on a1/b1/c1 at the SAME seeds on the SAME CLI (2.1.198) with noise
+**OFF** produced **0 interrupts across all 9 cells**; with noise **ON** (A7) the same seeds
+interrupted. The interrupts were **noise-caused** — the constant **D36 `elapsed_ms` envelope**
+(present in every noise-active run of every class) tripping V2's `schema_fingerprint` probes on
+`/shipping/rates` and `/inventory/items`. What A7 read as "task-intrinsic" (V2 firing the same
+surfaces across classes) was the common envelope, not task behavior.
+
+### Corrected finding (channel-selective noise sensitivity)
+- **CONTENT noise (an additive field): V2 FALSE-FIRES** — closed-world `schema_fingerprint`
+  (verdict `"drift instantiates schema_shape"`); the field **APPEARED**, no value drifted (forensic
+  check, 2 cells: baseline `{sku,dest,rate,carrier,est_days}` vs observed `+elapsed_ms[,+advisory]`).
+- **ONE-SHOT STATUS noise (a transient-500-that-heals): V2 does NOT fire** — side-channel isolation;
+  a fire-once worker-path transient is invisible to the probes (exactly zero under our injection).
+  **Sustained status noise is UNTESTED.**
+- No grind-deaths. The confirmatory FIR 0.0 survives a one-shot transient but **not** a content
+  addition.
+
+### Pre-registration held (the refuted predictions are the evidence)
+Three frozen predictions were **refuted by the data** — the pre-registration working as intended:
+(a) A7 M3 — V2 transient fast path fires (it did not; status is side-channel-isolated); (b) A7b
+arm (a) — the interrupts reproduce noiseless (they did not: 0/9 → noise-caused); (c) A7b arm (b) —
+the fast path fires on a monitored-surface transient (it did not; V2 fired on the envelope, not the
+500). The reader banner + the A7b closing section are the correction record; the A7 section is
+retained **unedited** as the as-written post-hoc record.
+
+**Scope:** no gate value, detection count, recall, cost, or verdict changes. Corrects an exploratory
+finding; records the channel-selective sensitivity and the schema_fingerprint mechanism.
