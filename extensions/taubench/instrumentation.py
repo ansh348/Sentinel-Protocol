@@ -61,26 +61,70 @@ class CostMeter:
 
     (an assignment, three occurrences). So user.get_total_cost(), surfaced as
     EnvInfo.user_cost on the terminal step, reports only the LAST call's cost, not the
-    episode sum. NEVER read tau-bench's cost fields for measurement.
+    episode sum. NEVER read tau-bench's cost fields for measurement. This meter reads
+    per-call cost/tokens straight off the litellm response instead.
 
-    This meter is where per-call token/cost records attach later (the August
-    pre-registration window). For now it records tool-call counts and asserts zero LLM
-    spend -- this harness makes no model calls at all.
+    strict=True (default, for the deterministic test suite): recording an LLM call RAISES,
+    enforcing the zero-LLM invariant. strict=False (live runs): records per-call cost and
+    token counts for BOTH the agent and the user simulator, split by role. Cost comes from
+    res._hidden_params["response_cost"]; tokens from res.usage.{prompt,completion}_tokens.
     """
 
-    def __init__(self) -> None:
+    _ROLES = ("agent", "user")
+
+    def __init__(self, strict: bool = True) -> None:
+        self.strict = strict
         self.n_tool_calls = 0
         self.tool_calls: List[str] = []
+        self.calls: List[dict] = []  # per-LLM-call records (role/cost/tokens/model)
         self.n_llm_calls = 0
-        self.llm_cost = 0.0  # always 0 here; the attach point for real cost accounting later
+        self.cost_by_role = {r: 0.0 for r in self._ROLES}
+        self.tokens_by_role = {r: {"prompt": 0, "completion": 0} for r in self._ROLES}
+        self.max_call_cost = 0.0
 
     def record_tool_call(self, name: str) -> None:
         self.n_tool_calls += 1
         self.tool_calls.append(name)
 
-    def record_llm_call(self, cost: float) -> None:  # attach point; unused in this harness
+    def record_llm_call(self, role: str, cost: float, prompt_tokens: int = 0,
+                        completion_tokens: int = 0, model: Optional[str] = None) -> dict:
+        if self.strict:
+            raise AssertionError(
+                "CostMeter is strict (zero-LLM invariant): record_llm_call is not allowed. "
+                "Use CostMeter(strict=False) for live runs."
+            )
+        role = role if role in self._ROLES else "agent"
+        cost = float(cost or 0.0)
+        rec = {"role": role, "cost": cost, "prompt_tokens": int(prompt_tokens or 0),
+               "completion_tokens": int(completion_tokens or 0), "model": model}
+        self.calls.append(rec)
         self.n_llm_calls += 1
-        self.llm_cost += cost
+        self.cost_by_role[role] += cost
+        self.tokens_by_role[role]["prompt"] += rec["prompt_tokens"]
+        self.tokens_by_role[role]["completion"] += rec["completion_tokens"]
+        self.max_call_cost = max(self.max_call_cost, cost)
+        return rec
+
+    @property
+    def llm_cost(self) -> float:
+        return self.cost_by_role["agent"] + self.cost_by_role["user"]
+
+    @property
+    def agent_cost(self) -> float:
+        return self.cost_by_role["agent"]
+
+    @property
+    def user_cost(self) -> float:
+        return self.cost_by_role["user"]
+
+    def snapshot(self) -> dict:
+        return {
+            "n_llm_calls": self.n_llm_calls,
+            "agent_cost": round(self.agent_cost, 6),
+            "user_cost": round(self.user_cost, 6),
+            "llm_cost": round(self.llm_cost, 6),
+            "tokens_by_role": {r: dict(t) for r, t in self.tokens_by_role.items()},
+        }
 
     def assert_zero_llm_cost(self) -> None:
         assert self.n_llm_calls == 0 and self.llm_cost == 0.0, (

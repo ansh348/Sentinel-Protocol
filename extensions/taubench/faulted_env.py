@@ -57,18 +57,36 @@ class FaultedEnv:
         task_split: str = "test",
         trace_path: Optional[str] = None,
         probe_sees_faults: bool = True,
+        live_user: bool = False,
+        user_model: Optional[str] = None,
+        user_provider: Optional[str] = None,
+        cost_meter: Optional[CostMeter] = None,
     ) -> None:
         # Import here so the module is importable without tau_bench and so the litellm
         # guard in conftest is installed before tau_bench.envs.user is imported.
         from tau_bench.envs.retail.env import MockRetailDomainEnv
 
-        # user_strategy="human" builds a HumanUserSimulationEnv with NO model call at
-        # construction (the LLM strategy calls completion() in __init__). We then swap in
-        # NullUser so reset()/step() never call input() or a model.
-        self.inner = MockRetailDomainEnv(
-            user_strategy="human", task_index=task_index, task_split=task_split
-        )
-        self.inner.user = NullUser()
+        self.live_user = live_user
+        if live_user:
+            # LIVE path: the real llm user simulator, which makes (metered) model calls.
+            # Requires a metering wrapper on litellm.completion to be installed first, and a
+            # provider whose key is configured. Constructing the env itself resets the user
+            # simulator once (one model call) -- stock tau-bench behavior.
+            if not user_model or not user_provider:
+                raise ValueError("live_user=True requires user_model and user_provider")
+            self.inner = MockRetailDomainEnv(
+                user_strategy="llm", user_model=user_model, user_provider=user_provider,
+                task_index=task_index, task_split=task_split,
+            )
+        else:
+            # Deterministic path: no model call ever. user_strategy="human" builds a
+            # HumanUserSimulationEnv with NO model call at construction (the LLM strategy
+            # calls completion() in __init__); NullUser then replaces it so reset()/step()
+            # never call input() or a model.
+            self.inner = MockRetailDomainEnv(
+                user_strategy="human", task_index=task_index, task_split=task_split
+            )
+            self.inner.user = NullUser()
 
         self.faults: List[FaultConfig] = list(faults or [])
         self.probe_sees_faults = probe_sees_faults
@@ -83,7 +101,7 @@ class FaultedEnv:
         self._in_reward = False
         self._t0: Optional[float] = None
 
-        self.cost_meter = CostMeter()
+        self.cost_meter = cost_meter if cost_meter is not None else CostMeter()
         self.trace = TraceWriter(trace_path)
         self.probe_trace = TraceWriter(_probe_path(trace_path))
 
@@ -95,9 +113,13 @@ class FaultedEnv:
         self.inner.calculate_reward = self._guarded_calculate_reward
 
     # ------------------------------------------------------------------ lifecycle
-    def reset(self, task_index: Optional[int] = None) -> str:
+    def reset(self, task_index: Optional[int] = None):
+        """Reset the episode and RE-ARM. Returns the inner EnvResetResponse (so a stock
+        tau-bench agent can drive this wrapper as a drop-in env); the reset data hash is
+        recorded in the trace. In live mode this triggers the user simulator's reset (one
+        metered model call)."""
         idx = self.inner.task_index if task_index is None else task_index
-        self.inner.reset(idx)  # reload clean data + set task (NullUser.reset, no model)
+        reset_res = self.inner.reset(idx)  # reload clean data + set task (+ user reset)
         self.inner.tools_map = dict(self._pristine_map)
         self.inner.tools_info = [dict(s) for s in self._pristine_info]
         self.counter = 0
@@ -108,7 +130,14 @@ class FaultedEnv:
         self.trace.write({
             "event": "reset", "task_index": idx, "data_hash": h, "armed": self.armed,
         })
-        return h
+        return reset_res
+
+    @property
+    def fault_active(self) -> bool:
+        """True iff at least one fault has fired (is currently armed/active). Distinct from
+        `armed`, the episode-level disarm-invariant flag that is set at reset regardless of
+        whether any fault exists. With an empty fault set, `fault_active` is always False."""
+        return bool(self._fired)
 
     # -------------------------------------------------------------- fault firing
     def _maybe_fire(self) -> List[str]:

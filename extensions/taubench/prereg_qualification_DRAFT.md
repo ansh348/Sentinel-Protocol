@@ -38,8 +38,14 @@ measured against it.
 
 - Agent strategy: tau-bench **tool_calling_agent** (`--agent-strategy tool-calling`).
 - Agent sampling temperature: **0.0**.
-- Agent model: **`[DECISION]`** (provider + model id).
-- User simulator model: **`[DECISION]`** (provider + model id).
+- Agent model: **`[DECISION]`** — provisional value **`anthropic / claude-haiku-4-5`**,
+  smoke-tested 2026-07-03; **binds only at ratification**. Rationale: a Haiku-class Claude
+  agent keeps the tau-bench arm's only changing variable *the environment* (not a foreign
+  agent), matching the main study's Claude/Haiku workers, and is competent enough that
+  tonight's costs extrapolate against a real baseline.
+- User simulator model: **`[DECISION]`** — provisional value **`openai / gpt-4o`**
+  (tau-bench's stock default; since the draft pins the user-sim strategy and temperature to
+  stock, the model follows), smoke-tested 2026-07-03; **binds only at ratification**.
 - User simulator strategy: **llm** (stock).
 - User simulator temperature: **stock (unset)** — inherit tau-bench's default; do not pin.
 - Environment: retail, `task_split = test`.
@@ -104,8 +110,8 @@ files are CANDIDATE / UNQUALIFIED examples.
 | Where | Decision | Suggested |
 |-------|----------|-----------|
 | §1 | k trials per cell (clean and injected) | 3 |
-| §2 | agent model (provider + id) | open |
-| §2 | user simulator model (provider + id) | open |
+| §2 | agent model (provider + id) | provisional `anthropic / claude-haiku-4-5` (smoke-tested 2026-07-03) |
+| §2 | user simulator model (provider + id) | provisional `openai / gpt-4o`, stock default (smoke-tested 2026-07-03) |
 | §5 | qualification-phase spend cap | $40 of $150 |
 
 ## What this draft does NOT authorize
