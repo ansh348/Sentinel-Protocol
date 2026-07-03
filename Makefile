@@ -3,10 +3,17 @@
 # at a different interpreter: make test PY=python
 PY ?= ../.venv/Scripts/python.exe
 
-.PHONY: test serve smoke phase0 night0 queue ops manifest gates freeze
+.PHONY: test taubench serve smoke phase0 night0 queue ops manifest gates freeze
 
 test:
 	$(PY) -m pytest tests/ -q
+
+# tau-bench fault-injection harness self-tests (zero-LLM, deterministic; extensions/taubench).
+# Kept separate from `test` because they load tau-bench + the litellm-raising guard.
+# PYTHONUTF8=1: tau-bench reads its JSON data/README with the platform default codec, which
+# breaks on Windows (cp1252) -- UTF-8 mode is the safe default. See extensions/taubench/PORT_NOTES.md.
+taubench:
+	PYTHONUTF8=1 $(PY) -m pytest extensions/taubench/tests -q
 
 # Manual world server for poking around; never used by comparative runs.
 serve:

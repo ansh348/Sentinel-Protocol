@@ -1,0 +1,8 @@
+{
+  "_header": "CANDIDATE — UNQUALIFIED — parameters NOT frozen. Example config for the tau-bench port scoping window; frozen values are set at the August pre-registration, not here.",
+  "id": "F2_remove_cancel",
+  "kind": "surface_removal",
+  "target_tool": "cancel_pending_order",
+  "trigger_n": 2,
+  "note": "The capability disappears: remove cancel_pending_order from tools_map AND tools_info, so the agent no longer sees it. Also the Landmine-1 demonstrator -- if left armed through calculate_reward it makes a blind baseline hash-match the corrupted oracle (false pass); the disarm hook prevents this."
+}

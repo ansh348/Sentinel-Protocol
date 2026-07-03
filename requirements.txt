@@ -5,3 +5,8 @@ pytest>=8
 httpx>=0.27
 PyYAML>=6
 psutil>=5.9
+
+# tau-bench fault-injection extension (extensions/taubench/). Pinned to an exact commit.
+# MIT license. On Windows, install under `PYTHONUTF8=1` (upstream setup.py reads README.md
+# with the platform default codec). See extensions/taubench/PORT_NOTES.md.
+tau_bench @ git+https://github.com/sierra-research/tau-bench.git@59a200c6d575d595120f1cb70fea53cef0632f6b

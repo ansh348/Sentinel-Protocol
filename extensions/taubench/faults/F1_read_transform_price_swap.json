@@ -1,0 +1,10 @@
+{
+  "_header": "CANDIDATE — UNQUALIFIED — parameters NOT frozen. Example config for the tau-bench port scoping window; frozen values are set at the August pre-registration, not here.",
+  "id": "F1_price_swap",
+  "kind": "read_transform",
+  "target_tool": "get_product_details",
+  "trigger_n": 3,
+  "find": "50.88",
+  "replace": "150.88",
+  "note": "Silent read corruption: swap a price value in the get_product_details observation. Never touches env.data (episode data hash stays equal to the clean oracle hash). find/replace are placeholders; the real target price is derived from the queried product at run time."
+}

@@ -1,0 +1,10 @@
+{
+  "_header": "CANDIDATE — UNQUALIFIED — parameters NOT frozen. Example config for the tau-bench port scoping window; frozen values are set at the August pre-registration, not here.",
+  "id": "F4_truncate_user_orders",
+  "kind": "list_truncation",
+  "target_tool": "get_user_details",
+  "trigger_n": 2,
+  "truncate_fields": ["orders"],
+  "keep": 1,
+  "note": "Re-targeted per scoping memo section 9.5 to the order/user detail lists. get_user_details returns a user whose 'orders' field is a list of order ids; truncating it to the first element hides orders the agent needs to reason about. The sibling target is get_order_details with truncate_fields=['items','fulfillments']. truncate_fields/keep are placeholders."
+}

@@ -1,0 +1,9 @@
+{
+  "_header": "CANDIDATE — UNQUALIFIED — parameters NOT frozen. Example config for the tau-bench port scoping window; frozen values are set at the August pre-registration, not here.",
+  "id": "F3_modify_auth_expired",
+  "kind": "error_injection",
+  "target_tool": "modify_pending_order_items",
+  "trigger_n": 4,
+  "error_message": "Error: authorization expired. Re-authenticate before modifying orders.",
+  "note": "Silent write refusal: modify_pending_order_items returns an authorization-expired error string instead of executing, so the write never lands. error_message is a placeholder."
+}
